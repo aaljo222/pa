@@ -1,23 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 
 /**
- * 변리사 미팅용 — 청구항 1 5단계 파이프라인 시각화
- *
- * 예시 문제: 전기기사 전기자기학 — 코일 자속 계산
- * "권수 N=200, 단면적 A=2cm², 길이 ℓ=10cm 인 환상 솔레노이드에
- *  전류 I=2A 가 흐를 때 자속 Φ 의 값은?"
- *
- * 5단계 자동 재생:
- *   ① 의미 단위 분해 (질문 요소 + 선택지 요소)  — 7초
- *   ② 노드/엣지 문항 구조 변환                — 8초
- *   ③ 신경망 임베딩 생성                       — 7초
- *   ④ 유사도 연산 → 점수 벡터 산출             — 7초
- *   ⑤ 점수 벡터 기반 정답 결정                 — 6초
- * 총 35초 사이클, 무한 반복.
+ * 변리사 미팅용 — 청구항 1 5단계 파이프라인 시각화 (v2 컬러풀)
+ * 출원: 이재오 (2025-12-22) | 변리사: 이경림
  */
 
 // ──────────────────────────────────────────────────────────────
-// 5단계 정의
+// 5단계 정의 — 단계별 고유 컬러
 // ──────────────────────────────────────────────────────────────
 const STAGES = [
   {
@@ -28,33 +17,45 @@ const STAGES = [
     claim_text:
       "상기 문장형 문제를 구성하는 질문 요소 및 선택지 요소를 의미 단위로 분해하는 단계",
     claim_no: "청구항 1 (a)",
+    accent: "#7c3aed",
+    accentSoft: "#ede9fe",
+    emoji: "✂️",
   },
   {
     no: 2,
-    label_ko: "노드·엣지 문항 구조 변환",
+    label_ko: "노드·엣지 그래프 변환",
     label_en: "Graph Construction",
     duration: 8000,
     claim_text:
       "상기 질문 요소 및 상기 선택지 요소를 노드로 하고, 상기 노드들 간의 의미적 또는 구조적 관계를 엣지로 하는 복수의 문항 구조로 변환하는 단계",
     claim_no: "청구항 1 (b) + 청구항 3",
+    accent: "#ec4899",
+    accentSoft: "#fce7f3",
+    emoji: "🕸️",
   },
   {
     no: 3,
-    label_ko: "신경망 임베딩 생성",
+    label_ko: "신경망 임베딩",
     label_en: "Embedding Generation",
     duration: 7000,
     claim_text:
       "상기 복수의 문항 구조에 신경망 또는 임베딩 기법을 적용하여 질문 요소 임베딩 및 선택지 요소 임베딩을 생성하는 단계",
     claim_no: "청구항 1 (c) + 청구항 5",
+    accent: "#0891b2",
+    accentSoft: "#cffafe",
+    emoji: "🧠",
   },
   {
     no: 4,
-    label_ko: "유사도 연산 · 점수 벡터",
+    label_ko: "유사도 · 점수 벡터",
     label_en: "Similarity Scoring",
     duration: 7000,
     claim_text:
       "상기 질문 요소 임베딩과 상기 선택지 요소 임베딩 간의 유사도 또는 거리 연산을 수행하여 각 선택지에 대한 점수 벡터를 산출하는 단계",
     claim_no: "청구항 1 (d) + 청구항 6",
+    accent: "#16a34a",
+    accentSoft: "#dcfce7",
+    emoji: "📊",
   },
   {
     no: 5,
@@ -64,18 +65,20 @@ const STAGES = [
     claim_text:
       "상기 점수 벡터에 기초하여 상기 선택지들 중 하나를 정답으로 결정하는 단계",
     claim_no: "청구항 1 (e) + 청구항 7",
+    accent: "#ea580c",
+    accentSoft: "#ffedd5",
+    emoji: "🎯",
   },
 ];
 
 const TOTAL_DURATION = STAGES.reduce((s, st) => s + st.duration, 0);
 
 // ──────────────────────────────────────────────────────────────
-// 예시 문제 (전기기사 EM — 환상 솔레노이드 자속)
+// 예시 문제
 // ──────────────────────────────────────────────────────────────
 const PROBLEM = {
   question:
     "권수 N=200, 단면적 A=2cm², 평균 자로 길이 ℓ=10cm 인 환상 솔레노이드에 전류 I=2A 가 흐를 때 자속 Φ 의 값(Wb)은? (μ₀ = 4π×10⁻⁷)",
-  // 의미 단위 분해 결과
   question_units: [
     { type: "concept", value: "환상 솔레노이드", role: "대상" },
     { type: "value", value: "N=200", role: "권수" },
@@ -90,13 +93,9 @@ const PROBLEM = {
     { no: 3, value: "4.021×10⁻⁵ Wb" },
     { no: 4, value: "8.042×10⁻⁵ Wb" },
   ],
-  // 정답 = N·μ₀·I·A / ℓ = 200 × 4π×10⁻⁷ × 2 × 2×10⁻⁴ / 0.1 ≈ 2.011×10⁻⁵ Wb
   formula: "Φ = N·μ₀·I·A / ℓ",
 };
 
-// ──────────────────────────────────────────────────────────────
-// 노드 좌표 (단계 2에서 그래프 그릴 때)
-// ──────────────────────────────────────────────────────────────
 const NODES = [
   { id: "Q", label: "Φ", type: "question", x: 380, y: 80, kind: "질문노드" },
   { id: "C1", label: "환상 솔레노이드", type: "concept", x: 130, y: 180, kind: "개념노드" },
@@ -106,68 +105,52 @@ const NODES = [
   { id: "V2", label: "A=2cm²", type: "value", x: 200, y: 290, kind: "값노드" },
   { id: "V3", label: "ℓ=10cm", type: "value", x: 340, y: 290, kind: "값노드" },
   { id: "V4", label: "I=2A", type: "value", x: 480, y: 290, kind: "값노드" },
-  // 선택지 노드
-  { id: "O1", label: "①", type: "option", x: 110, y: 410, kind: "선택지노드" },
-  { id: "O2", label: "②", type: "option", x: 310, y: 410, kind: "선택지노드", correct: true },
-  { id: "O3", label: "③", type: "option", x: 510, y: 410, kind: "선택지노드" },
-  { id: "O4", label: "④", type: "option", x: 680, y: 410, kind: "선택지노드" },
+  { id: "O1", label: "①", type: "option", x: 110, y: 410, kind: "선택지" },
+  { id: "O2", label: "②", type: "option", x: 310, y: 410, kind: "선택지", correct: true },
+  { id: "O3", label: "③", type: "option", x: 510, y: 410, kind: "선택지" },
+  { id: "O4", label: "④", type: "option", x: 680, y: 410, kind: "선택지" },
 ];
 
 const EDGES = [
-  // 질문 ↔ 개념·수식 (참조)
   { from: "Q", to: "C2", type: "참조" },
   { from: "Q", to: "F", type: "참조" },
   { from: "C1", to: "F", type: "포함" },
   { from: "C2", to: "F", type: "동등성" },
-  // 값 → 수식 (계산)
   { from: "V1", to: "F", type: "계산" },
   { from: "V2", to: "F", type: "계산" },
   { from: "V3", to: "F", type: "계산" },
   { from: "V4", to: "F", type: "계산" },
-  // 선택지 → 질문 (후보)
   { from: "O1", to: "Q", type: "참조" },
   { from: "O2", to: "Q", type: "참조" },
   { from: "O3", to: "Q", type: "참조" },
   { from: "O4", to: "Q", type: "참조" },
 ];
 
-// 색상 토큰
-const COLOR = {
-  bg: "#0a0e1a",
-  bgDeep: "#050811",
-  panel: "#0f1726",
-  border: "#1d2940",
-  borderActive: "#f0a830",
-  text: "#e8edf5",
-  textDim: "#6b7895",
-  amber: "#f0a830",
-  amberDeep: "#c47a14",
-  cyan: "#5ec8d8",
-  cyanDeep: "#2a8a99",
-  green: "#7dd87d",
-  red: "#e87a7a",
-  purple: "#a98be8",
+const NODE_COLOR = {
+  question: { fill: "#fef3c7", stroke: "#f59e0b", text: "#92400e" },
+  concept: { fill: "#cffafe", stroke: "#06b6d4", text: "#155e75" },
+  formula: { fill: "#ede9fe", stroke: "#7c3aed", text: "#5b21b6" },
+  value: { fill: "#f1f5f9", stroke: "#64748b", text: "#334155" },
+  option: { fill: "#dcfce7", stroke: "#16a34a", text: "#166534" },
 };
 
-const NODE_COLOR = {
-  question: COLOR.amber,
-  concept: COLOR.cyan,
-  formula: COLOR.purple,
-  value: COLOR.textDim,
-  option: COLOR.green,
+const EDGE_COLOR = {
+  참조: "#06b6d4",
+  포함: "#7c3aed",
+  계산: "#f59e0b",
+  동등성: "#16a34a",
 };
 
 // ──────────────────────────────────────────────────────────────
 // 메인 컴포넌트
 // ──────────────────────────────────────────────────────────────
 export default function PatentClaim1Demo() {
-  const [elapsed, setElapsed] = useState(0); // ms within current cycle
+  const [elapsed, setElapsed] = useState(0);
   const [paused, setPaused] = useState(false);
   const [cycleCount, setCycleCount] = useState(0);
   const lastTickRef = useRef(performance.now());
   const rafRef = useRef(null);
 
-  // 애니메이션 루프
   useEffect(() => {
     function tick(now) {
       const dt = now - lastTickRef.current;
@@ -189,7 +172,6 @@ export default function PatentClaim1Demo() {
     return () => cancelAnimationFrame(rafRef.current);
   }, [paused]);
 
-  // 현재 단계 계산
   let stageIdx = 0;
   let stageElapsed = elapsed;
   for (let i = 0; i < STAGES.length; i++) {
@@ -206,76 +188,60 @@ export default function PatentClaim1Demo() {
     <div
       style={{
         minHeight: "100vh",
-        background: COLOR.bg,
-        color: COLOR.text,
+        background:
+          "linear-gradient(135deg, #fef6e4 0%, #fde2e7 25%, #e0e7ff 60%, #ddd6fe 100%)",
+        color: "#1e293b",
         fontFamily:
-          "'Iowan Old Style', 'Palatino Linotype', 'Sitka Text', Georgia, serif",
-        padding: "0",
+          "'Pretendard', 'Noto Sans KR', 'Apple SD Gothic Neo', system-ui, sans-serif",
+        position: "relative",
         overflow: "hidden",
       }}
     >
-      {/* 그리드 배경 (PCB 느낌) */}
-      <div
-        style={{
-          position: "fixed",
-          inset: 0,
-          backgroundImage:
-            "radial-gradient(circle at 1px 1px, rgba(94,200,216,0.08) 1px, transparent 0)",
-          backgroundSize: "32px 32px",
-          pointerEvents: "none",
-          zIndex: 0,
-        }}
+      <Blobs stageAccent={stage.accent} />
+
+      <Header
+        cycleCount={cycleCount}
+        paused={paused}
+        setPaused={setPaused}
+        stage={stage}
       />
 
-      {/* 헤더 */}
-      <Header cycleCount={cycleCount} paused={paused} setPaused={setPaused} />
-
-      {/* 메인 그리드 */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "320px 1fr",
-          gap: "0",
+          gridTemplateColumns: "340px 1fr",
           position: "relative",
           zIndex: 1,
-          minHeight: "calc(100vh - 90px)",
+          minHeight: "calc(100vh - 110px)",
         }}
       >
-        {/* 좌측: 청구항 텍스트 사이드바 */}
         <ClaimSidebar stageIdx={stageIdx} />
 
-        {/* 우측: 단계별 시각화 */}
-        <div
-          style={{
-            padding: "32px 48px",
-            background: COLOR.bg,
-            position: "relative",
-          }}
-        >
-          {/* 단계 헤더 */}
+        <div style={{ padding: "32px 40px 40px", position: "relative" }}>
           <StageHeader stage={stage} progress={stageProgress} />
 
-          {/* 메인 시각화 영역 */}
           <div
             style={{
-              marginTop: "28px",
-              minHeight: "520px",
-              background: COLOR.panel,
-              border: `1px solid ${COLOR.border}`,
-              borderRadius: "4px",
-              padding: "32px",
+              marginTop: "24px",
+              minHeight: "560px",
+              background: "rgba(255, 255, 255, 0.75)",
+              backdropFilter: "blur(20px)",
+              border: "1px solid rgba(255, 255, 255, 0.8)",
+              borderRadius: "24px",
+              padding: "36px",
               position: "relative",
               overflow: "hidden",
+              boxShadow: `0 20px 60px -20px ${stage.accent}40, 0 0 0 1px ${stage.accent}20`,
+              transition: "box-shadow 0.6s",
             }}
           >
-            {stageIdx === 0 && <Stage1 progress={stageProgress} />}
-            {stageIdx === 1 && <Stage2 progress={stageProgress} />}
-            {stageIdx === 2 && <Stage3 progress={stageProgress} />}
-            {stageIdx === 3 && <Stage4 progress={stageProgress} />}
-            {stageIdx === 4 && <Stage5 progress={stageProgress} />}
+            {stageIdx === 0 && <Stage1 progress={stageProgress} stage={stage} />}
+            {stageIdx === 1 && <Stage2 progress={stageProgress} stage={stage} />}
+            {stageIdx === 2 && <Stage3 progress={stageProgress} stage={stage} />}
+            {stageIdx === 3 && <Stage4 progress={stageProgress} stage={stage} />}
+            {stageIdx === 4 && <Stage5 progress={stageProgress} stage={stage} />}
           </div>
 
-          {/* 단계 인디케이터 */}
           <StageIndicator stageIdx={stageIdx} elapsed={elapsed} />
         </div>
       </div>
@@ -284,73 +250,151 @@ export default function PatentClaim1Demo() {
 }
 
 // ──────────────────────────────────────────────────────────────
+// 배경 컬러 블롭
+// ──────────────────────────────────────────────────────────────
+function Blobs({ stageAccent }) {
+  return (
+    <>
+      <div
+        style={{
+          position: "fixed",
+          top: "-200px",
+          right: "-200px",
+          width: "600px",
+          height: "600px",
+          background: `radial-gradient(circle, ${stageAccent}40, transparent 70%)`,
+          borderRadius: "50%",
+          filter: "blur(40px)",
+          pointerEvents: "none",
+          transition: "background 1s",
+          zIndex: 0,
+        }}
+      />
+      <div
+        style={{
+          position: "fixed",
+          bottom: "-200px",
+          left: "200px",
+          width: "500px",
+          height: "500px",
+          background:
+            "radial-gradient(circle, rgba(124, 58, 237, 0.25), transparent 70%)",
+          borderRadius: "50%",
+          filter: "blur(60px)",
+          pointerEvents: "none",
+          zIndex: 0,
+        }}
+      />
+      <div
+        style={{
+          position: "fixed",
+          top: "30%",
+          left: "10%",
+          width: "300px",
+          height: "300px",
+          background:
+            "radial-gradient(circle, rgba(236, 72, 153, 0.18), transparent 70%)",
+          borderRadius: "50%",
+          filter: "blur(50px)",
+          pointerEvents: "none",
+          zIndex: 0,
+        }}
+      />
+    </>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────
 // 헤더
 // ──────────────────────────────────────────────────────────────
-function Header({ cycleCount, paused, setPaused }) {
+function Header({ cycleCount, paused, setPaused, stage }) {
   return (
     <div
       style={{
-        background: COLOR.bgDeep,
-        borderBottom: `1px solid ${COLOR.border}`,
-        padding: "20px 48px",
+        background: "rgba(255, 255, 255, 0.7)",
+        backdropFilter: "blur(20px)",
+        borderBottom: "1px solid rgba(255, 255, 255, 0.6)",
+        padding: "20px 40px",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
         position: "relative",
-        zIndex: 2,
+        zIndex: 10,
       }}
     >
       <div>
         <div
           style={{
-            fontFamily:
-              "'SF Mono', 'Cascadia Mono', Menlo, Monaco, monospace",
+            fontFamily: "'JetBrains Mono', 'SF Mono', monospace",
             fontSize: "11px",
-            letterSpacing: "0.18em",
-            color: COLOR.amber,
-            marginBottom: "4px",
+            letterSpacing: "0.2em",
+            background: "linear-gradient(90deg, #7c3aed, #ec4899)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            fontWeight: 700,
+            marginBottom: "6px",
           }}
         >
-          PATENT APPLICATION · 2025-12-22
+          ◆ PATENT APPLICATION · 2025-12-22 · 이재오
         </div>
         <h1
           style={{
-            fontSize: "22px",
-            fontWeight: 500,
+            fontSize: "26px",
+            fontWeight: 800,
             margin: 0,
-            letterSpacing: "0.01em",
-            color: COLOR.text,
+            letterSpacing: "-0.02em",
+            color: "#1e293b",
           }}
         >
-          문장형 문제 기반 자동 풀이 및 맞춤형 문항 생성{" "}
-          <span style={{ color: COLOR.textDim, fontWeight: 300 }}>
-            — 청구항 1 (a)~(e) 시각화
+          문장형 문제 자동 풀이 시스템
+          <span
+            style={{
+              marginLeft: "12px",
+              fontSize: "16px",
+              fontWeight: 500,
+              color: "#64748b",
+            }}
+          >
+            청구항 1 (a)~(e) 시각화
           </span>
         </h1>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
         <div
           style={{
-            fontFamily: "'SF Mono', monospace",
+            fontFamily: "'JetBrains Mono', monospace",
             fontSize: "12px",
-            color: COLOR.textDim,
+            color: "#64748b",
+            background: "white",
+            padding: "8px 14px",
+            borderRadius: "999px",
+            border: "1px solid #e2e8f0",
           }}
         >
-          cycle <span style={{ color: COLOR.amber }}>#{cycleCount + 1}</span>
+          cycle{" "}
+          <span style={{ color: stage.accent, fontWeight: 700 }}>
+            #{cycleCount + 1}
+          </span>
         </div>
         <button
           onClick={() => setPaused(!paused)}
           style={{
-            background: paused ? COLOR.amber : "transparent",
-            color: paused ? COLOR.bgDeep : COLOR.text,
-            border: `1px solid ${paused ? COLOR.amber : COLOR.border}`,
-            padding: "8px 18px",
-            fontFamily: "'SF Mono', monospace",
-            fontSize: "11px",
-            letterSpacing: "0.1em",
+            background: paused
+              ? `linear-gradient(135deg, ${stage.accent}, ${stage.accent}dd)`
+              : "white",
+            color: paused ? "white" : "#1e293b",
+            border: paused ? "none" : "1px solid #e2e8f0",
+            padding: "10px 22px",
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: "12px",
+            fontWeight: 700,
+            letterSpacing: "0.08em",
             cursor: "pointer",
-            borderRadius: "2px",
+            borderRadius: "999px",
             transition: "all 0.2s",
+            boxShadow: paused
+              ? `0 8px 24px -8px ${stage.accent}80`
+              : "0 2px 8px -2px rgba(0,0,0,0.1)",
           }}
         >
           {paused ? "▶ RESUME" : "❚❚ PAUSE"}
@@ -361,65 +405,95 @@ function Header({ cycleCount, paused, setPaused }) {
 }
 
 // ──────────────────────────────────────────────────────────────
-// 좌측 청구항 사이드바
+// 좌측 사이드바
 // ──────────────────────────────────────────────────────────────
 function ClaimSidebar({ stageIdx }) {
   return (
     <div
       style={{
-        background: COLOR.bgDeep,
-        borderRight: `1px solid ${COLOR.border}`,
+        background: "rgba(255, 255, 255, 0.55)",
+        backdropFilter: "blur(20px)",
+        borderRight: "1px solid rgba(255, 255, 255, 0.6)",
         padding: "32px 24px",
         position: "relative",
       }}
     >
       <div
         style={{
-          fontFamily: "'SF Mono', monospace",
+          display: "inline-block",
+          padding: "6px 14px",
+          background: "linear-gradient(135deg, #1e293b, #475569)",
+          color: "white",
+          fontFamily: "'JetBrains Mono', monospace",
           fontSize: "10px",
           letterSpacing: "0.2em",
-          color: COLOR.textDim,
-          marginBottom: "20px",
+          borderRadius: "999px",
+          fontWeight: 700,
+          marginBottom: "16px",
         }}
       >
-        【청구항 1】
+        ★ 청구항 1
       </div>
-      <div style={{ fontSize: "13px", lineHeight: "1.8", color: COLOR.textDim }}>
-        문제 관리 서버에 의해 수행되는, 학습 또는 평가를 목적으로 제공되는 문장형
-        문제를 자동으로 풀이하고, 상기 문장형 문제를 기반으로 학습자에게 맞춤형
-        문항을 생성해주기 위한 방법으로서,
+      <div
+        style={{
+          fontSize: "12px",
+          lineHeight: "1.75",
+          color: "#475569",
+          marginBottom: "24px",
+        }}
+      >
+        문제 관리 서버에 의해 수행되는, 학습 또는 평가를 목적으로 제공되는
+        문장형 문제를 자동으로 풀이하고, 학습자에게 맞춤형 문항을 생성해주기
+        위한 방법으로서,
       </div>
 
-      <div style={{ marginTop: "24px" }}>
+      <div>
         {STAGES.map((s, i) => (
           <div
             key={i}
             style={{
               padding: "14px 16px",
               marginBottom: "10px",
-              background: i === stageIdx ? "rgba(240,168,48,0.08)" : "transparent",
-              borderLeft: `2px solid ${
-                i === stageIdx ? COLOR.amber : COLOR.border
+              background:
+                i === stageIdx
+                  ? `linear-gradient(135deg, ${s.accentSoft}, white)`
+                  : "rgba(255,255,255,0.5)",
+              borderLeft: `3px solid ${
+                i === stageIdx ? s.accent : "transparent"
               }`,
-              transition: "all 0.4s",
+              borderRadius: "0 12px 12px 0",
+              transition: "all 0.5s",
+              boxShadow:
+                i === stageIdx ? `0 4px 16px -4px ${s.accent}60` : "none",
+              transform: i === stageIdx ? "translateX(4px)" : "translateX(0)",
             }}
           >
             <div
               style={{
-                fontFamily: "'SF Mono', monospace",
-                fontSize: "10px",
-                color: i === stageIdx ? COLOR.amber : COLOR.textDim,
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
                 marginBottom: "6px",
-                letterSpacing: "0.1em",
               }}
             >
-              ({String.fromCharCode(97 + i)}) {s.label_en}
+              <span style={{ fontSize: "16px" }}>{s.emoji}</span>
+              <div
+                style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: "10px",
+                  color: i === stageIdx ? s.accent : "#94a3b8",
+                  letterSpacing: "0.1em",
+                  fontWeight: 700,
+                }}
+              >
+                ({String.fromCharCode(97 + i)}) {s.label_en}
+              </div>
             </div>
             <div
               style={{
-                fontSize: "12px",
+                fontSize: "11.5px",
                 lineHeight: "1.65",
-                color: i === stageIdx ? COLOR.text : COLOR.textDim,
+                color: i === stageIdx ? "#1e293b" : "#64748b",
               }}
             >
               {s.claim_text}
@@ -430,25 +504,44 @@ function ClaimSidebar({ stageIdx }) {
 
       <div
         style={{
-          marginTop: "28px",
-          padding: "16px",
-          background: COLOR.panel,
-          borderRadius: "2px",
-          border: `1px solid ${COLOR.border}`,
+          marginTop: "24px",
+          padding: "18px",
+          background: "linear-gradient(135deg, #1e293b, #334155)",
+          borderRadius: "16px",
+          color: "white",
+          position: "relative",
+          overflow: "hidden",
         }}
       >
         <div
           style={{
-            fontFamily: "'SF Mono', monospace",
+            position: "absolute",
+            top: "-30px",
+            right: "-30px",
+            width: "100px",
+            height: "100px",
+            background: "linear-gradient(135deg, #ec4899, #7c3aed)",
+            borderRadius: "50%",
+            filter: "blur(20px)",
+            opacity: 0.6,
+          }}
+        />
+        <div
+          style={{
+            position: "relative",
+            fontFamily: "'JetBrains Mono', monospace",
             fontSize: "10px",
-            color: COLOR.amber,
-            letterSpacing: "0.15em",
+            letterSpacing: "0.2em",
             marginBottom: "8px",
+            color: "#fbbf24",
+            fontWeight: 700,
           }}
         >
-          ESSENTIAL BASIS
+          ★ ESSENTIAL BASIS
         </div>
-        <div style={{ fontSize: "12px", lineHeight: "1.6", color: COLOR.text }}>
+        <div
+          style={{ position: "relative", fontSize: "12px", lineHeight: "1.6" }}
+        >
           객관식 시험 문제 (질문 + N개 선택지) 의 구조화된 입력 단위를 처리하는
           발명 — US 10,108,604 (텍스트→문제 생성) 과 본질적 차별
         </div>
@@ -466,65 +559,86 @@ function StageHeader({ stage, progress }) {
       <div
         style={{
           display: "flex",
-          alignItems: "baseline",
-          gap: "16px",
-          marginBottom: "8px",
+          alignItems: "center",
+          gap: "20px",
+          marginBottom: "12px",
         }}
       >
         <div
           style={{
-            fontFamily: "'SF Mono', monospace",
-            fontSize: "48px",
-            fontWeight: 200,
-            color: COLOR.amber,
-            lineHeight: 1,
-            letterSpacing: "-0.02em",
+            width: "84px",
+            height: "84px",
+            borderRadius: "20px",
+            background: `linear-gradient(135deg, ${stage.accent}, ${stage.accent}cc)`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "44px",
+            boxShadow: `0 10px 30px -10px ${stage.accent}aa`,
+            transition: "all 0.6s",
           }}
         >
-          0{stage.no}
+          {stage.emoji}
         </div>
         <div>
           <div
             style={{
-              fontFamily: "'SF Mono', monospace",
+              display: "inline-block",
+              padding: "4px 12px",
+              background: stage.accentSoft,
+              color: stage.accent,
+              fontFamily: "'JetBrains Mono', monospace",
               fontSize: "10px",
-              letterSpacing: "0.2em",
-              color: COLOR.textDim,
+              letterSpacing: "0.18em",
+              fontWeight: 700,
+              borderRadius: "999px",
+              marginBottom: "8px",
             }}
           >
             {stage.claim_no} · STEP {stage.no} / 5
           </div>
-          <div style={{ fontSize: "26px", fontWeight: 500, marginTop: "4px" }}>
+          <div
+            style={{
+              fontSize: "32px",
+              fontWeight: 800,
+              color: "#1e293b",
+              letterSpacing: "-0.02em",
+              lineHeight: 1.1,
+            }}
+          >
             {stage.label_ko}
           </div>
           <div
             style={{
-              fontFamily: "'SF Mono', monospace",
-              fontSize: "12px",
-              color: COLOR.cyan,
-              marginTop: "2px",
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: "13px",
+              color: stage.accent,
+              marginTop: "4px",
               letterSpacing: "0.05em",
+              fontWeight: 600,
             }}
           >
             {stage.label_en}
           </div>
         </div>
       </div>
-      {/* 진행 막대 */}
       <div
         style={{
-          height: "2px",
-          background: COLOR.border,
+          height: "6px",
+          background: "rgba(0, 0, 0, 0.05)",
           marginTop: "16px",
-          position: "relative",
+          borderRadius: "999px",
+          overflow: "hidden",
         }}
       >
         <div
           style={{
             height: "100%",
             width: `${progress * 100}%`,
-            background: COLOR.amber,
+            background: `linear-gradient(90deg, ${stage.accent}, ${stage.accent}aa)`,
             transition: "width 0.1s linear",
+            borderRadius: "999px",
+            boxShadow: `0 0 12px ${stage.accent}`,
           }}
         />
       </div>
@@ -532,20 +646,14 @@ function StageHeader({ stage, progress }) {
   );
 }
 
-// ──────────────────────────────────────────────────────────────
-// 단계 인디케이터 (하단)
-// ──────────────────────────────────────────────────────────────
 function StageIndicator({ stageIdx, elapsed }) {
   return (
     <div
       style={{
-        marginTop: "24px",
+        marginTop: "20px",
         display: "flex",
-        gap: "4px",
+        gap: "6px",
         alignItems: "center",
-        fontFamily: "'SF Mono', monospace",
-        fontSize: "11px",
-        color: COLOR.textDim,
       }}
     >
       {STAGES.map((s, i) => (
@@ -553,22 +661,48 @@ function StageIndicator({ stageIdx, elapsed }) {
           key={i}
           style={{
             flex: s.duration,
-            height: "32px",
-            background: i < stageIdx ? COLOR.cyanDeep : i === stageIdx ? COLOR.amberDeep : COLOR.panel,
-            border: `1px solid ${i === stageIdx ? COLOR.amber : COLOR.border}`,
+            height: "44px",
+            background:
+              i < stageIdx
+                ? `linear-gradient(135deg, ${s.accent}, ${s.accent}dd)`
+                : i === stageIdx
+                ? `linear-gradient(135deg, ${s.accent}, ${s.accent}cc)`
+                : "rgba(255,255,255,0.6)",
+            color: i <= stageIdx ? "white" : "#94a3b8",
+            border:
+              i === stageIdx
+                ? `2px solid ${s.accent}`
+                : "1px solid rgba(255,255,255,0.6)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            color: i === stageIdx ? COLOR.text : i < stageIdx ? COLOR.text : COLOR.textDim,
-            fontSize: "10px",
-            letterSpacing: "0.1em",
+            fontSize: "11px",
+            fontWeight: 700,
+            letterSpacing: "0.05em",
             transition: "all 0.4s",
+            borderRadius: "12px",
+            boxShadow:
+              i === stageIdx ? `0 8px 24px -8px ${s.accent}aa` : "none",
+            transform: i === stageIdx ? "translateY(-2px)" : "translateY(0)",
+            cursor: "default",
           }}
         >
+          <span style={{ marginRight: "6px" }}>{s.emoji}</span>
           ({String.fromCharCode(97 + i)}) {s.label_ko}
         </div>
       ))}
-      <div style={{ marginLeft: "16px", color: COLOR.textDim }}>
+      <div
+        style={{
+          marginLeft: "12px",
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: "12px",
+          color: "#64748b",
+          background: "white",
+          padding: "8px 14px",
+          borderRadius: "999px",
+          border: "1px solid #e2e8f0",
+        }}
+      >
         {(elapsed / 1000).toFixed(1)}s / {(TOTAL_DURATION / 1000).toFixed(0)}s
       </div>
     </div>
@@ -576,11 +710,9 @@ function StageIndicator({ stageIdx, elapsed }) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// 단계 1: 의미 단위 분해
+// 단계 1
 // ══════════════════════════════════════════════════════════════
-function Stage1({ progress }) {
-  // 0 ~ 0.4: 원본 문제 표시
-  // 0.4 ~ 1.0: 의미 단위로 분해되어 흩어짐
+function Stage1({ progress, stage }) {
   const showUnits = progress > 0.4;
   const unitProgress = Math.max(0, (progress - 0.4) / 0.6);
 
@@ -594,91 +726,106 @@ function Stage1({ progress }) {
           alignItems: "start",
         }}
       >
-        {/* 좌측: 원본 문제 */}
         <div>
-          <SectionLabel>INPUT — 문장형 문제</SectionLabel>
+          <SectionLabel color={stage.accent}>📥 INPUT — 문장형 문제</SectionLabel>
           <div
             style={{
-              padding: "20px 24px",
-              background: COLOR.bgDeep,
-              border: `1px solid ${COLOR.border}`,
-              borderRadius: "2px",
-              fontSize: "15px",
+              padding: "24px",
+              background: "linear-gradient(135deg, #fef3c7, #fde68a)",
+              border: "2px solid #fbbf24",
+              borderRadius: "16px",
+              fontSize: "16px",
               lineHeight: 1.8,
-              color: COLOR.text,
+              color: "#78350f",
               minHeight: "180px",
+              fontWeight: 500,
+              boxShadow: "0 8px 24px -8px rgba(251, 191, 36, 0.4)",
             }}
           >
             {PROBLEM.question}
           </div>
-          <div style={{ marginTop: "16px" }}>
-            <SectionLabel>선택지</SectionLabel>
-            <div style={{ display: "grid", gap: "6px" }}>
+          <div style={{ marginTop: "20px" }}>
+            <SectionLabel color={stage.accent}>📋 선택지</SectionLabel>
+            <div style={{ display: "grid", gap: "8px" }}>
               {PROBLEM.choices.map((c) => (
                 <div
                   key={c.no}
                   style={{
-                    fontFamily: "'SF Mono', monospace",
+                    fontFamily: "'JetBrains Mono', monospace",
                     fontSize: "13px",
-                    padding: "6px 12px",
-                    color: COLOR.textDim,
+                    padding: "10px 16px",
+                    background: "white",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "10px",
+                    color: "#475569",
+                    fontWeight: 500,
                   }}
                 >
-                  ({c.no}) {c.value}
+                  <span style={{ color: stage.accent, fontWeight: 700 }}>
+                    ({c.no})
+                  </span>{" "}
+                  {c.value}
                 </div>
               ))}
             </div>
           </div>
         </div>
 
-        {/* 우측: 분해된 의미 단위들 */}
         <div>
-          <SectionLabel>OUTPUT — 의미 단위</SectionLabel>
+          <SectionLabel color={stage.accent}>📤 OUTPUT — 의미 단위</SectionLabel>
           <div
             style={{
-              minHeight: "360px",
+              minHeight: "380px",
               position: "relative",
-              padding: "16px",
-              background: COLOR.bgDeep,
-              border: `1px dashed ${COLOR.border}`,
-              borderRadius: "2px",
+              padding: "20px",
+              background:
+                "linear-gradient(135deg, rgba(124, 58, 237, 0.05), rgba(236, 72, 153, 0.05))",
+              border: "2px dashed #c4b5fd",
+              borderRadius: "16px",
             }}
           >
             {showUnits && (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
                 {PROBLEM.question_units.map((u, i) => {
                   const delay = (i / PROBLEM.question_units.length) * 0.7;
                   const opacity = Math.max(
                     0,
                     Math.min(1, (unitProgress - delay) * 4)
                   );
-                  const translateY = Math.max(0, 20 - opacity * 20);
+                  const translateY = Math.max(0, 30 - opacity * 30);
+                  const isValue = u.type === "value";
                   return (
                     <div
                       key={i}
                       style={{
                         opacity,
-                        transform: `translateY(${translateY}px)`,
-                        padding: "8px 14px",
-                        background:
-                          u.type === "value"
-                            ? "rgba(94,200,216,0.1)"
-                            : "rgba(240,168,48,0.1)",
-                        border: `1px solid ${
-                          u.type === "value" ? COLOR.cyan : COLOR.amber
+                        transform: `translateY(${translateY}px) scale(${
+                          0.9 + opacity * 0.1
+                        })`,
+                        padding: "12px 18px",
+                        background: isValue
+                          ? "linear-gradient(135deg, #cffafe, #a5f3fc)"
+                          : "linear-gradient(135deg, #fce7f3, #fbcfe8)",
+                        border: `2px solid ${isValue ? "#06b6d4" : "#ec4899"}`,
+                        borderRadius: "12px",
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: "13px",
+                        fontWeight: 600,
+                        color: isValue ? "#155e75" : "#831843",
+                        boxShadow: `0 6px 16px -4px ${
+                          isValue
+                            ? "rgba(6, 182, 212, 0.3)"
+                            : "rgba(236, 72, 153, 0.3)"
                         }`,
-                        borderRadius: "2px",
-                        fontFamily: "'SF Mono', monospace",
-                        fontSize: "12px",
-                        color: u.type === "value" ? COLOR.cyan : COLOR.amber,
                       }}
                     >
                       <div
                         style={{
                           fontSize: "9px",
                           letterSpacing: "0.15em",
-                          color: COLOR.textDim,
-                          marginBottom: "2px",
+                          color: isValue ? "#0891b2" : "#be185d",
+                          marginBottom: "4px",
+                          fontWeight: 700,
                         }}
                       >
                         {u.role}
@@ -697,61 +844,78 @@ function Stage1({ progress }) {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontFamily: "'SF Mono', monospace",
-                  fontSize: "12px",
-                  color: COLOR.textDim,
-                  letterSpacing: "0.1em",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: "13px",
+                  color: stage.accent,
+                  letterSpacing: "0.08em",
+                  fontWeight: 600,
                 }}
               >
-                형태소 · 토큰 · 개체명 · 의미역 분석 중...
+                <PulseDot color={stage.accent} /> 형태소 · 토큰 · 개체명 · 의미역
+                분석 중...
               </div>
             )}
           </div>
         </div>
       </div>
 
-      <BottomNote>
-        ⓘ 청구항 2: 형태소 분석, 토큰화, 개체명 인식, 의미역 분석을 적용하여 질문
-        요소(개념·단위)와 선택지 요소(수치·단위)를 분리 추출
+      <BottomNote color={stage.accent}>
+        💡 <strong>청구항 2</strong>: 형태소 분석, 토큰화, 개체명 인식, 의미역
+        분석을 적용하여 질문 요소(개념·단위)와 선택지 요소(수치·단위)를 분리 추출
       </BottomNote>
     </div>
   );
 }
 
 // ══════════════════════════════════════════════════════════════
-// 단계 2: 노드/엣지 그래프 변환
+// 단계 2
 // ══════════════════════════════════════════════════════════════
-function Stage2({ progress }) {
-  // 노드 → 엣지 → 라벨 순으로 그려짐
+function Stage2({ progress, stage }) {
   const nodeProgress = Math.min(1, progress * 2.5);
   const edgeProgress = Math.max(0, Math.min(1, (progress - 0.4) * 2.2));
 
   return (
     <div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 240px", gap: "24px" }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 220px",
+          gap: "24px",
+        }}
+      >
         <div>
-          <SectionLabel>OUTPUT — 문항 구조 그래프</SectionLabel>
+          <SectionLabel color={stage.accent}>🕸️ 문항 구조 그래프</SectionLabel>
           <div
             style={{
-              background: COLOR.bgDeep,
-              border: `1px solid ${COLOR.border}`,
-              borderRadius: "2px",
+              background: "linear-gradient(135deg, #fdf2f8, #fce7f3)",
+              border: "2px solid #f9a8d4",
+              borderRadius: "16px",
               padding: "16px",
+              boxShadow: "0 8px 24px -8px rgba(236, 72, 153, 0.3)",
             }}
           >
             <svg viewBox="0 0 760 470" style={{ width: "100%", display: "block" }}>
-              {/* 엣지 */}
+              <defs>
+                {Object.entries(EDGE_COLOR).map(([type, color]) => (
+                  <marker
+                    key={type}
+                    id={`arrow-${type}`}
+                    viewBox="0 0 10 10"
+                    refX="9"
+                    refY="5"
+                    markerWidth="6"
+                    markerHeight="6"
+                    orient="auto"
+                  >
+                    <path d="M0,0 L10,5 L0,10 z" fill={color} opacity="0.7" />
+                  </marker>
+                ))}
+              </defs>
               {EDGES.map((e, i) => {
                 const from = NODES.find((n) => n.id === e.from);
                 const to = NODES.find((n) => n.id === e.to);
-                const visible = (i / EDGES.length) < edgeProgress;
+                const visible = i / EDGES.length < edgeProgress;
                 if (!visible) return null;
-                const colors = {
-                  참조: COLOR.cyan,
-                  포함: COLOR.purple,
-                  계산: COLOR.amber,
-                  동등성: COLOR.green,
-                };
                 return (
                   <line
                     key={i}
@@ -759,47 +923,60 @@ function Stage2({ progress }) {
                     y1={from.y}
                     x2={to.x}
                     y2={to.y}
-                    stroke={colors[e.type] || COLOR.textDim}
-                    strokeWidth="1.5"
+                    stroke={EDGE_COLOR[e.type]}
+                    strokeWidth="2"
                     strokeOpacity="0.55"
-                    strokeDasharray={e.type === "참조" ? "4 3" : "0"}
+                    strokeDasharray={e.type === "참조" ? "5 4" : "0"}
+                    markerEnd={`url(#arrow-${e.type})`}
                   />
                 );
               })}
-              {/* 노드 */}
               {NODES.map((n, i) => {
                 const t = i / NODES.length;
-                const opacity = Math.max(0, Math.min(1, (nodeProgress - t) * 5));
+                const opacity = Math.max(
+                  0,
+                  Math.min(1, (nodeProgress - t) * 5)
+                );
                 if (opacity <= 0) return null;
-                const r = n.type === "question" ? 26 : n.type === "option" ? 20 : 22;
-                const color = NODE_COLOR[n.type];
+                const r = n.type === "question" ? 32 : n.type === "option" ? 24 : 28;
+                const c = NODE_COLOR[n.type];
+                const scale = 0.7 + opacity * 0.3;
                 return (
-                  <g key={n.id} opacity={opacity}>
+                  <g
+                    key={n.id}
+                    opacity={opacity}
+                    transform={`translate(${n.x}, ${n.y}) scale(${scale}) translate(${-n.x}, ${-n.y})`}
+                  >
+                    <circle cx={n.x} cy={n.y} r={r + 4} fill={c.stroke} opacity="0.18" />
                     <circle
                       cx={n.x}
                       cy={n.y}
                       r={r}
-                      fill={COLOR.bgDeep}
-                      stroke={color}
-                      strokeWidth="1.5"
+                      fill={c.fill}
+                      stroke={c.stroke}
+                      strokeWidth="2.5"
                     />
                     <text
                       x={n.x}
                       y={n.y + 4}
                       textAnchor="middle"
-                      fontSize={n.type === "value" || n.type === "formula" ? "10" : "11"}
-                      fill={color}
-                      fontFamily="SF Mono, monospace"
+                      fontSize={
+                        n.type === "value" || n.type === "formula" ? "11" : "13"
+                      }
+                      fill={c.text}
+                      fontWeight="700"
+                      fontFamily="JetBrains Mono, SF Mono, monospace"
                     >
                       {n.label}
                     </text>
                     <text
                       x={n.x}
-                      y={n.y + r + 12}
+                      y={n.y + r + 14}
                       textAnchor="middle"
-                      fontSize="8"
-                      fill={COLOR.textDim}
-                      letterSpacing="0.1em"
+                      fontSize="9"
+                      fill={c.text}
+                      fontWeight="600"
+                      letterSpacing="0.08em"
                     >
                       {n.kind}
                     </text>
@@ -810,90 +987,104 @@ function Stage2({ progress }) {
           </div>
         </div>
 
-        {/* 우측 범례 */}
         <div>
-          <SectionLabel>NODE TYPES (청구항 3)</SectionLabel>
+          <SectionLabel color={stage.accent}>NODE TYPES</SectionLabel>
           {[
-            ["질문노드", COLOR.amber],
-            ["개념노드", COLOR.cyan],
-            ["수식노드", COLOR.purple],
-            ["값노드", COLOR.textDim],
-            ["선택지노드", COLOR.green],
-          ].map(([label, color]) => (
-            <div
-              key={label}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "10px",
-                marginBottom: "8px",
-                fontSize: "12px",
-              }}
-            >
-              <div
-                style={{
-                  width: 14,
-                  height: 14,
-                  borderRadius: "50%",
-                  border: `2px solid ${color}`,
-                }}
-              />
-              <span style={{ color: COLOR.text }}>{label}</span>
-            </div>
-          ))}
-
-          <div style={{ marginTop: "20px" }}>
-            <SectionLabel>EDGE TYPES</SectionLabel>
-            {[
-              ["참조", COLOR.cyan, "dashed"],
-              ["포함", COLOR.purple, "solid"],
-              ["계산", COLOR.amber, "solid"],
-              ["동등성", COLOR.green, "solid"],
-            ].map(([label, color, style]) => (
+            ["질문노드", "question"],
+            ["개념노드", "concept"],
+            ["수식노드", "formula"],
+            ["값노드", "value"],
+            ["선택지", "option"],
+          ].map(([label, type]) => {
+            const c = NODE_COLOR[type];
+            return (
               <div
                 key={label}
                 style={{
                   display: "flex",
                   alignItems: "center",
                   gap: "10px",
+                  padding: "8px 12px",
                   marginBottom: "6px",
-                  fontSize: "12px",
+                  background: c.fill,
+                  borderRadius: "8px",
+                  border: `1px solid ${c.stroke}`,
                 }}
               >
-                <svg width="20" height="6">
-                  <line
-                    x1="0"
-                    y1="3"
-                    x2="20"
-                    y2="3"
-                    stroke={color}
-                    strokeWidth="1.5"
-                    strokeDasharray={style === "dashed" ? "3 2" : "0"}
-                  />
-                </svg>
-                <span style={{ color: COLOR.text }}>{label}</span>
+                <div
+                  style={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: "50%",
+                    background: "white",
+                    border: `2.5px solid ${c.stroke}`,
+                  }}
+                />
+                <span style={{ color: c.text, fontSize: "12px", fontWeight: 700 }}>
+                  {label}
+                </span>
               </div>
-            ))}
+            );
+          })}
+
+          <div style={{ marginTop: "16px" }}>
+            <SectionLabel color={stage.accent}>EDGE TYPES</SectionLabel>
+            {[
+              ["참조", "dashed"],
+              ["포함", "solid"],
+              ["계산", "solid"],
+              ["동등성", "solid"],
+            ].map(([label, lineStyle]) => {
+              const color = EDGE_COLOR[label];
+              return (
+                <div
+                  key={label}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                    marginBottom: "6px",
+                    padding: "6px 10px",
+                  }}
+                >
+                  <svg width="24" height="6">
+                    <line
+                      x1="0"
+                      y1="3"
+                      x2="24"
+                      y2="3"
+                      stroke={color}
+                      strokeWidth="2.5"
+                      strokeDasharray={lineStyle === "dashed" ? "4 3" : "0"}
+                    />
+                  </svg>
+                  <span style={{ color: color, fontSize: "12px", fontWeight: 700 }}>
+                    {label}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
 
-      <BottomNote>
-        ⓘ 청구항 3: 노드는 질문/조건/선택지/개념/수식/값 노드 중 하나, 엣지는
-        의존·참조·포함·계산·동등성 관계 중 하나. <strong style={{ color: COLOR.amber }}>선택지가 그래프 정식 멤버</strong>인 점이
-        US 10,108,604 와의 핵심 차별점.
+      <BottomNote color={stage.accent}>
+        💡 <strong>청구항 3</strong>: 노드는 질문/조건/선택지/개념/수식/값 중 하나,
+        엣지는 의존·참조·포함·계산·동등성 관계 중 하나.{" "}
+        <strong style={{ color: stage.accent }}>
+          ✦ 선택지가 그래프 정식 멤버
+        </strong>
+        인 점이 US 10,108,604 와의 핵심 차별점.
       </BottomNote>
     </div>
   );
 }
 
 // ══════════════════════════════════════════════════════════════
-// 단계 3: 신경망 임베딩
+// 단계 3
 // ══════════════════════════════════════════════════════════════
-function Stage3({ progress }) {
-  // 노드 → 임베딩 벡터로 변환되는 모습
+function Stage3({ progress, stage }) {
   const VECTOR_DIM = 16;
-  // 시드 기반 의사난수 (안정적인 시각화)
   const seedVec = (seed, dim) =>
     Array.from({ length: dim }, (_, i) => {
       const x = Math.sin(seed * 13 + i * 7) * 10000;
@@ -901,24 +1092,27 @@ function Stage3({ progress }) {
     });
 
   const targets = [
-    { label: "질문 임베딩 (Φ)", color: COLOR.amber, vec: seedVec(1, VECTOR_DIM) },
-    { label: "선택지 ① 임베딩", color: COLOR.green, vec: seedVec(2, VECTOR_DIM) },
-    { label: "선택지 ② 임베딩", color: COLOR.green, vec: seedVec(3, VECTOR_DIM) },
-    { label: "선택지 ③ 임베딩", color: COLOR.green, vec: seedVec(4, VECTOR_DIM) },
-    { label: "선택지 ④ 임베딩", color: COLOR.green, vec: seedVec(5, VECTOR_DIM) },
+    { label: "질문 임베딩 (Φ)", color: "#7c3aed", bg: "#ede9fe", vec: seedVec(1, VECTOR_DIM) },
+    { label: "선택지 ① 임베딩", color: "#16a34a", bg: "#dcfce7", vec: seedVec(2, VECTOR_DIM) },
+    { label: "선택지 ② 임베딩", color: "#16a34a", bg: "#dcfce7", vec: seedVec(3, VECTOR_DIM) },
+    { label: "선택지 ③ 임베딩", color: "#16a34a", bg: "#dcfce7", vec: seedVec(4, VECTOR_DIM) },
+    { label: "선택지 ④ 임베딩", color: "#16a34a", bg: "#dcfce7", vec: seedVec(5, VECTOR_DIM) },
   ];
 
   return (
     <div>
-      <SectionLabel>GraphSAGE / GAT 적용 — 노드 → 고차원 벡터</SectionLabel>
+      <SectionLabel color={stage.accent}>
+        🧠 GraphSAGE / GAT 적용 — 노드 → 고차원 벡터
+      </SectionLabel>
 
       <div
         style={{
-          padding: "20px 24px",
-          background: COLOR.bgDeep,
-          border: `1px solid ${COLOR.border}`,
-          borderRadius: "2px",
+          padding: "24px",
+          background: "linear-gradient(135deg, #ecfeff, #cffafe)",
+          border: "2px solid #67e8f9",
+          borderRadius: "16px",
           marginTop: "12px",
+          boxShadow: "0 8px 24px -8px rgba(8, 145, 178, 0.3)",
         }}
       >
         {targets.map((t, i) => {
@@ -931,25 +1125,33 @@ function Stage3({ progress }) {
               key={i}
               style={{
                 display: "grid",
-                gridTemplateColumns: "180px 1fr",
+                gridTemplateColumns: "200px 1fr",
                 gap: "20px",
                 alignItems: "center",
-                padding: "10px 0",
+                padding: "12px 0",
                 opacity: itemProgress,
-                transform: `translateX(${(1 - itemProgress) * -20}px)`,
+                transform: `translateX(${(1 - itemProgress) * -30}px)`,
                 transition: "all 0.3s",
               }}
             >
               <div
                 style={{
-                  fontFamily: "'SF Mono', monospace",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "8px 14px",
+                  background: t.bg,
+                  borderRadius: "10px",
+                  fontFamily: "'JetBrains Mono', monospace",
                   fontSize: "12px",
                   color: t.color,
+                  fontWeight: 700,
+                  border: `1.5px solid ${t.color}`,
                 }}
               >
                 {t.label}
               </div>
-              <div style={{ display: "flex", gap: "3px" }}>
+              <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
                 {t.vec.map((v, j) => {
                   const cellOpacity = Math.max(
                     0,
@@ -960,10 +1162,10 @@ function Stage3({ progress }) {
                       key={j}
                       style={{
                         flex: 1,
-                        height: "32px",
-                        background: t.color,
-                        opacity: v * 0.9 * cellOpacity,
-                        borderRadius: "1px",
+                        height: "36px",
+                        background: `linear-gradient(180deg, ${t.color}, ${t.color}cc)`,
+                        opacity: v * 0.95 * cellOpacity,
+                        borderRadius: "4px",
                       }}
                       title={v.toFixed(3)}
                     />
@@ -971,14 +1173,15 @@ function Stage3({ progress }) {
                 })}
                 <div
                   style={{
-                    fontFamily: "'SF Mono', monospace",
-                    fontSize: "10px",
-                    color: COLOR.textDim,
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: "11px",
+                    color: "#64748b",
                     marginLeft: "12px",
-                    alignSelf: "center",
+                    fontWeight: 600,
+                    minWidth: "70px",
                   }}
                 >
-                  ℝ^{VECTOR_DIM}...{VECTOR_DIM > 16 ? "" : "768"}
+                  ℝ^{VECTOR_DIM}…768
                 </div>
               </div>
             </div>
@@ -986,20 +1189,19 @@ function Stage3({ progress }) {
         })}
       </div>
 
-      <BottomNote>
-        ⓘ 청구항 5: 그래프 합성곱 신경망(GCN), 그래프 어텐션 네트워크(GAT),
-        GraphSAGE, Node2Vec, 자기지도 대조학습 중 적어도 하나를 적용. 질문 임베딩
-        + 4개 선택지 임베딩 = 총 5개 벡터 생성.
+      <BottomNote color={stage.accent}>
+        💡 <strong>청구항 5</strong>: 그래프 합성곱 신경망(GCN), 그래프 어텐션
+        네트워크(GAT), GraphSAGE, Node2Vec, 자기지도 대조학습 중 적어도 하나를 적용.
+        질문 임베딩 + 4개 선택지 임베딩 = 총 5개 벡터 생성.
       </BottomNote>
     </div>
   );
 }
 
 // ══════════════════════════════════════════════════════════════
-// 단계 4: 유사도 연산
+// 단계 4
 // ══════════════════════════════════════════════════════════════
-function Stage4({ progress }) {
-  // 4개 선택지에 대한 유사도 점수 (실제 정답 ②가 가장 높게)
+function Stage4({ progress, stage }) {
   const scores = [
     { no: 1, value: 0.412 },
     { no: 2, value: 0.937, correct: true },
@@ -1009,34 +1211,40 @@ function Stage4({ progress }) {
 
   return (
     <div>
-      <SectionLabel>코사인 유사도 cos(질문, 선택지ᵢ) → 점수 벡터 산출</SectionLabel>
+      <SectionLabel color={stage.accent}>
+        📊 코사인 유사도 → 점수 벡터 산출
+      </SectionLabel>
 
       <div
         style={{
           marginTop: "12px",
-          padding: "24px",
-          background: COLOR.bgDeep,
-          border: `1px solid ${COLOR.border}`,
-          borderRadius: "2px",
+          padding: "28px",
+          background: "linear-gradient(135deg, #f0fdf4, #dcfce7)",
+          border: "2px solid #86efac",
+          borderRadius: "16px",
+          boxShadow: "0 8px 24px -8px rgba(22, 163, 74, 0.3)",
         }}
       >
-        {/* 공식 표시 */}
         <div
           style={{
-            fontFamily: "'SF Mono', monospace",
-            fontSize: "13px",
-            color: COLOR.textDim,
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: "14px",
+            color: "#166534",
             textAlign: "center",
-            padding: "8px 0 24px",
+            padding: "12px 20px",
+            background: "white",
+            borderRadius: "12px",
+            marginBottom: "24px",
             letterSpacing: "0.05em",
+            fontWeight: 600,
+            boxSizing: "border-box",
           }}
         >
           score(Q, Oᵢ) = cos(e_Q, e_Oᵢ) ·{" "}
-          <span style={{ color: COLOR.cyan }}>α_난이도</span> ·{" "}
-          <span style={{ color: COLOR.cyan }}>β_빈도</span>
+          <span style={{ color: "#0891b2" }}>α_난이도</span> ·{" "}
+          <span style={{ color: "#0891b2" }}>β_빈도</span>
         </div>
 
-        {/* 막대 그래프 */}
         {scores.map((s, i) => {
           const itemProgress = Math.max(
             0,
@@ -1056,20 +1264,23 @@ function Stage4({ progress }) {
             >
               <div
                 style={{
-                  fontFamily: "'SF Mono', monospace",
-                  fontSize: "16px",
-                  color: s.correct ? COLOR.amber : COLOR.text,
-                  fontWeight: s.correct ? 600 : 400,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: "20px",
+                  color: s.correct ? "#ea580c" : "#475569",
+                  fontWeight: 800,
+                  textAlign: "center",
                 }}
               >
                 ({s.no})
               </div>
               <div
                 style={{
-                  height: "28px",
-                  background: COLOR.panel,
+                  height: "36px",
+                  background: "white",
                   position: "relative",
-                  border: `1px solid ${COLOR.border}`,
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "8px",
+                  overflow: "hidden",
                 }}
               >
                 <div
@@ -1077,19 +1288,22 @@ function Stage4({ progress }) {
                     height: "100%",
                     width: `${barWidth}%`,
                     background: s.correct
-                      ? `linear-gradient(90deg, ${COLOR.amberDeep}, ${COLOR.amber})`
-                      : `linear-gradient(90deg, ${COLOR.cyanDeep}, ${COLOR.cyan})`,
+                      ? "linear-gradient(90deg, #fb923c, #ea580c, #c2410c)"
+                      : "linear-gradient(90deg, #67e8f9, #06b6d4, #0891b2)",
                     transition: "width 0.3s ease-out",
+                    boxShadow: s.correct
+                      ? "0 0 16px rgba(234, 88, 12, 0.5)"
+                      : "0 0 8px rgba(8, 145, 178, 0.3)",
                   }}
                 />
               </div>
               <div
                 style={{
-                  fontFamily: "'SF Mono', monospace",
-                  fontSize: "14px",
-                  color: s.correct ? COLOR.amber : COLOR.text,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: "15px",
+                  color: s.correct ? "#ea580c" : "#475569",
                   textAlign: "right",
-                  fontWeight: s.correct ? 600 : 400,
+                  fontWeight: 700,
                 }}
               >
                 {(s.value * itemProgress).toFixed(3)}
@@ -1098,18 +1312,18 @@ function Stage4({ progress }) {
           );
         })}
 
-        {/* 점수 벡터 표기 */}
         <div
           style={{
-            marginTop: "20px",
-            padding: "12px 16px",
-            background: COLOR.panel,
-            border: `1px solid ${COLOR.border}`,
-            borderRadius: "2px",
-            fontFamily: "'SF Mono', monospace",
+            marginTop: "24px",
+            padding: "14px 18px",
+            background: "white",
+            border: "2px solid #16a34a",
+            borderRadius: "12px",
+            fontFamily: "'JetBrains Mono', monospace",
             fontSize: "13px",
-            color: COLOR.cyan,
+            color: "#166534",
             opacity: progress,
+            fontWeight: 600,
           }}
         >
           score_vec = [
@@ -1120,20 +1334,22 @@ function Stage4({ progress }) {
         </div>
       </div>
 
-      <BottomNote>
-        ⓘ 청구항 6: 코사인 유사도 또는 유클리드 거리, 난이도 보정계수 + 문항 빈도
-        보정계수 적용. <strong style={{ color: COLOR.amber }}>1:N 매칭 (질문 1개 ↔ 선택지 N개)</strong> 구조는
-        US 10,108,604 (1:N 출력 = 새 문제 생성) 과 정반대 방향.
+      <BottomNote color={stage.accent}>
+        💡 <strong>청구항 6</strong>: 코사인 유사도 또는 유클리드 거리, 난이도
+        보정계수 + 문항 빈도 보정계수 적용.{" "}
+        <strong style={{ color: stage.accent }}>
+          ✦ 1:N 매칭 (질문 1개 ↔ 선택지 N개)
+        </strong>{" "}
+        구조는 US 10,108,604 (1:N 출력 = 새 문제 생성) 과 정반대 방향.
       </BottomNote>
     </div>
   );
 }
 
 // ══════════════════════════════════════════════════════════════
-// 단계 5: 정답 결정
+// 단계 5
 // ══════════════════════════════════════════════════════════════
-function Stage5({ progress }) {
-  // 단계: argmax 강조 → 정답 ② 도출
+function Stage5({ progress, stage }) {
   const showResult = progress > 0.4;
   const resultPulse = showResult
     ? 0.5 + 0.5 * Math.sin((progress - 0.4) * 12)
@@ -1141,25 +1357,39 @@ function Stage5({ progress }) {
 
   return (
     <div>
-      <SectionLabel>argmax(score_vec) — 점수 벡터 최대값 선택지를 정답으로 결정</SectionLabel>
+      <SectionLabel color={stage.accent}>
+        🎯 argmax(score_vec) — 점수 벡터 최대값 선택지를 정답으로 결정
+      </SectionLabel>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "32px", marginTop: "16px" }}>
-        {/* 좌측: 점수 벡터 + argmax */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: "28px",
+          marginTop: "16px",
+        }}
+      >
         <div
           style={{
             padding: "24px",
-            background: COLOR.bgDeep,
-            border: `1px solid ${COLOR.border}`,
-            borderRadius: "2px",
+            background: "linear-gradient(135deg, #fef3c7, #fde68a)",
+            border: "2px solid #f59e0b",
+            borderRadius: "16px",
+            boxShadow: "0 8px 24px -8px rgba(234, 88, 12, 0.3)",
           }}
         >
           <div
             style={{
-              fontFamily: "'SF Mono', monospace",
+              display: "inline-block",
+              padding: "5px 12px",
+              background: "white",
+              fontFamily: "'JetBrains Mono', monospace",
               fontSize: "11px",
-              color: COLOR.textDim,
-              marginBottom: "12px",
+              color: "#92400e",
+              fontWeight: 700,
               letterSpacing: "0.1em",
+              borderRadius: "999px",
+              marginBottom: "16px",
             }}
           >
             INPUT — score_vec
@@ -1175,95 +1405,122 @@ function Stage5({ progress }) {
               style={{
                 display: "flex",
                 justifyContent: "space-between",
-                padding: "8px 12px",
-                marginBottom: "6px",
+                alignItems: "center",
+                padding: "12px 16px",
+                marginBottom: "8px",
                 background: s.correct
-                  ? `rgba(240,168,48,${0.1 + resultPulse * 0.2})`
-                  : COLOR.panel,
-                border: `1px solid ${s.correct ? COLOR.amber : COLOR.border}`,
-                fontFamily: "'SF Mono', monospace",
+                  ? `linear-gradient(135deg, white, rgba(251, 146, 60, ${
+                      0.15 + resultPulse * 0.3
+                    }))`
+                  : "white",
+                border: `2px solid ${s.correct ? "#ea580c" : "#fde68a"}`,
+                borderRadius: "10px",
+                fontFamily: "'JetBrains Mono', monospace",
                 fontSize: "14px",
-                color: s.correct ? COLOR.amber : COLOR.text,
+                color: s.correct ? "#9a3412" : "#78350f",
+                fontWeight: s.correct ? 700 : 500,
                 transition: "background 0.2s",
+                boxShadow: s.correct
+                  ? `0 0 ${
+                      8 + resultPulse * 12
+                    }px rgba(234, 88, 12, ${0.4 + resultPulse * 0.3})`
+                  : "none",
               }}
             >
               <span>
                 ({s.no}) {PROBLEM.choices.find((c) => c.no === s.no).value}
               </span>
-              <span>{s.v.toFixed(3)}</span>
+              <span style={{ fontWeight: 700 }}>{s.v.toFixed(3)}</span>
             </div>
           ))}
 
           <div
             style={{
               marginTop: "20px",
-              padding: "10px 14px",
-              background: COLOR.panel,
-              borderLeft: `3px solid ${COLOR.amber}`,
-              fontFamily: "'SF Mono', monospace",
+              padding: "12px 16px",
+              background: "linear-gradient(135deg, #ea580c, #c2410c)",
+              color: "white",
+              borderRadius: "10px",
+              fontFamily: "'JetBrains Mono', monospace",
               fontSize: "12px",
-              color: COLOR.amber,
+              fontWeight: 600,
+              boxShadow: "0 6px 16px -4px rgba(234, 88, 12, 0.5)",
             }}
           >
-            argmax → index 2 (점수 0.937 / 임계값 차이 0.416 → 신뢰도 HIGH)
+            ▶ argmax → index 2 · 점수 0.937 · Δ=0.416 · 신뢰도 HIGH
           </div>
         </div>
 
-        {/* 우측: 최종 정답 */}
         <div
           style={{
-            padding: "24px",
-            background: COLOR.bgDeep,
-            border: `1px solid ${COLOR.amber}`,
-            borderRadius: "2px",
+            padding: "28px",
+            background:
+              "linear-gradient(135deg, #ea580c 0%, #f97316 50%, #fb923c 100%)",
+            borderRadius: "16px",
             position: "relative",
             overflow: "hidden",
+            color: "white",
+            boxShadow: "0 16px 40px -12px rgba(234, 88, 12, 0.6)",
           }}
         >
-          {/* 장식 — 회로 grid */}
           <div
             style={{
               position: "absolute",
-              inset: 0,
-              backgroundImage:
-                "linear-gradient(rgba(240,168,48,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(240,168,48,0.05) 1px, transparent 1px)",
-              backgroundSize: "20px 20px",
-              pointerEvents: "none",
+              top: "-40px",
+              right: "-40px",
+              width: "180px",
+              height: "180px",
+              background: "rgba(255, 255, 255, 0.15)",
+              borderRadius: "50%",
+              filter: "blur(20px)",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              bottom: "-30px",
+              left: "-30px",
+              width: "120px",
+              height: "120px",
+              background: "rgba(251, 191, 36, 0.3)",
+              borderRadius: "50%",
+              filter: "blur(20px)",
             }}
           />
           <div style={{ position: "relative" }}>
             <div
               style={{
-                fontFamily: "'SF Mono', monospace",
+                fontFamily: "'JetBrains Mono', monospace",
                 fontSize: "11px",
-                color: COLOR.amber,
                 letterSpacing: "0.2em",
-                marginBottom: "16px",
+                marginBottom: "12px",
+                fontWeight: 700,
+                opacity: 0.9,
               }}
             >
-              OUTPUT — 결정된 정답
+              ★ OUTPUT — 결정된 정답
             </div>
             <div
               style={{
-                fontSize: "72px",
-                fontWeight: 200,
-                color: COLOR.amber,
+                fontSize: "96px",
+                fontWeight: 800,
                 lineHeight: 1,
                 marginBottom: "12px",
                 opacity: showResult ? 1 : 0.2,
-                transform: `scale(${showResult ? 1 : 0.8})`,
-                transition: "all 0.4s",
+                transform: `scale(${showResult ? 1 : 0.6})`,
+                transition: "all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
+                textShadow: showResult ? "0 6px 24px rgba(0,0,0,0.2)" : "none",
               }}
             >
               ②
             </div>
             <div
               style={{
-                fontFamily: "'SF Mono', monospace",
-                fontSize: "20px",
-                color: COLOR.text,
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: "22px",
                 opacity: showResult ? 1 : 0.3,
                 transition: "opacity 0.4s 0.2s",
+                fontWeight: 700,
               }}
             >
               Φ ≈ 2.011 × 10⁻⁵ Wb
@@ -1271,46 +1528,60 @@ function Stage5({ progress }) {
 
             <div
               style={{
-                marginTop: "24px",
-                padding: "12px 14px",
-                background: "rgba(125,216,125,0.08)",
-                borderLeft: `3px solid ${COLOR.green}`,
-                fontSize: "12px",
-                color: COLOR.green,
+                marginTop: "20px",
+                padding: "14px 16px",
+                background: "rgba(255, 255, 255, 0.2)",
+                backdropFilter: "blur(10px)",
+                borderRadius: "10px",
+                border: "1px solid rgba(255, 255, 255, 0.3)",
+                fontSize: "12.5px",
                 opacity: showResult ? 1 : 0,
                 transition: "opacity 0.4s 0.4s",
-                lineHeight: 1.6,
+                lineHeight: 1.7,
+                fontFamily: "'JetBrains Mono', monospace",
+                fontWeight: 500,
               }}
             >
-              검증: Φ = N·μ₀·I·A / ℓ
-              <br />= 200 · 4π×10⁻⁷ · 2 · 2×10⁻⁴ / 0.1
-              <br />= 2.011 × 10⁻⁵ Wb ✓
+              ✓ 검증: Φ = N·μ₀·I·A / ℓ
+              <br />
+              = 200 · 4π×10⁻⁷ · 2 · 2×10⁻⁴ / 0.1
+              <br />= <strong>2.011 × 10⁻⁵ Wb</strong>
             </div>
           </div>
         </div>
       </div>
 
-      <BottomNote>
-        ⓘ 청구항 7: 점수 벡터의 최대값 또는 최소값 기준으로 정답 결정. 동점 발생
-        시 난이도 기준 또는 무작위화 규칙 적용. <strong style={{ color: COLOR.amber }}>이미 제공된 N개 선택지에서
-        정답 1개를 선택</strong>하는 구조 — 새 문제 생성(US 10,108,604)이 아닌 정답 결정.
+      <BottomNote color={stage.accent}>
+        💡 <strong>청구항 7</strong>: 점수 벡터의 최대값 또는 최소값 기준으로 정답
+        결정. 동점 발생 시 난이도 기준 또는 무작위화 규칙 적용.{" "}
+        <strong style={{ color: stage.accent }}>
+          ✦ 이미 제공된 N개 선택지에서 정답 1개를 선택
+        </strong>
+        하는 구조 — 새 문제 생성(US 10,108,604)이 아닌 정답 결정.
       </BottomNote>
     </div>
   );
 }
 
 // ──────────────────────────────────────────────────────────────
-// 공통 컴포넌트
+// 공통
 // ──────────────────────────────────────────────────────────────
-function SectionLabel({ children }) {
+function SectionLabel({ children, color }) {
   return (
     <div
       style={{
-        fontFamily: "'SF Mono', 'Cascadia Mono', Menlo, monospace",
-        fontSize: "10px",
-        letterSpacing: "0.2em",
-        color: COLOR.textDim,
-        marginBottom: "10px",
+        display: "inline-flex",
+        alignItems: "center",
+        padding: "6px 14px",
+        background: "white",
+        border: `1.5px solid ${color || "#cbd5e1"}`,
+        color: color || "#475569",
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: "11px",
+        letterSpacing: "0.12em",
+        fontWeight: 700,
+        marginBottom: "12px",
+        borderRadius: "999px",
       }}
     >
       {children}
@@ -1318,20 +1589,46 @@ function SectionLabel({ children }) {
   );
 }
 
-function BottomNote({ children }) {
+function BottomNote({ children, color }) {
   return (
     <div
       style={{
-        marginTop: "20px",
-        padding: "12px 16px",
-        background: "rgba(94,200,216,0.04)",
-        borderLeft: `2px solid ${COLOR.cyan}`,
-        fontSize: "12px",
+        marginTop: "24px",
+        padding: "16px 20px",
+        background: "white",
+        borderLeft: `4px solid ${color || "#06b6d4"}`,
+        fontSize: "13px",
         lineHeight: 1.7,
-        color: COLOR.textDim,
+        color: "#334155",
+        borderRadius: "0 12px 12px 0",
+        boxShadow: "0 4px 12px -4px rgba(0,0,0,0.08)",
       }}
     >
       {children}
     </div>
+  );
+}
+
+function PulseDot({ color }) {
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        width: "10px",
+        height: "10px",
+        background: color,
+        borderRadius: "50%",
+        marginRight: "10px",
+        animation: "pulse 1.5s infinite",
+      }}
+    >
+      <style>{`
+        @keyframes pulse {
+          0% { box-shadow: 0 0 0 0 ${color}80; }
+          70% { box-shadow: 0 0 0 12px ${color}00; }
+          100% { box-shadow: 0 0 0 0 ${color}00; }
+        }
+      `}</style>
+    </span>
   );
 }
