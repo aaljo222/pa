@@ -1,134 +1,180 @@
-# 특허 청구항 1 시각화 데모
+# 변리사 미팅 데모 v3
 
-**변리사 미팅용** — 청구항 1 의 5단계 파이프라인을 인터랙티브 애니메이션으로 시각화
-
-> 출원: 이재오 (특허고객번호 4-2012-004036-0)
-> 출원일: 2025-12-22
-> 대리인: 이경림 변리사
-> 발명: 문장형 문제 기반 자동 풀이 및 맞춤형 문항을 생성하기 위한 시스템 및 방법
+(주)에이아이컴퍼니의 5건 특허 portfolio + 청구항 1 시각화 + **라이브 백엔드 연결**
 
 ---
 
-## 실행 방법
+## 🎯 페이지 구성
 
-### 1. Node.js 설치 (한 번만)
+| 라우트 | 페이지 | 용도 |
+|--------|--------|------|
+| `/` | 홈 (랜딩) | 회사 소개 + 5건 특허 카운터 + CTA 두 개 |
+| `/demo/claim1` | **청구항 1 애니메이션** | 5단계 파이프라인 35초 자동 재생 (별창) |
+| `/demo/live` | **라이브 진단** | 백엔드 호출 → 12문제 실시간 생성 |
+| `/patents` | 특허 5건 portfolio | 각 특허 상세 |
+| `/about` | 회사 소개 | 이재오님 약력 + 기술 자산 |
 
-[Node.js 공식 사이트](https://nodejs.org/)에서 LTS 버전 설치 (v18 이상).
+---
 
-설치 확인:
+## 🚀 실행
+
+### 1. 환경 설정
+
 ```bash
-node --version   # v18.x.x 이상
-npm --version
+cp .env.example .env
+# .env 파일 열어서 VITE_API_BASE 확인
 ```
 
-### 2. 의존성 설치 (한 번만)
+### 2. 의존성 설치 + 실행
 
-이 폴더에서:
 ```bash
 npm install
-```
-
-### 3. 개발 서버 실행
-
-```bash
 npm run dev
 ```
 
-자동으로 `http://localhost:5173/` 가 브라우저에서 열립니다.
+`http://localhost:5173` 가 자동으로 열립니다.
 
 ---
 
-## 데모 구성
+## 🔌 백엔드 연결
 
-총 **35초 사이클, 무한 반복**:
+라이브 진단 페이지(`/demo/live`)는 백엔드를 호출합니다. 백엔드 셋업:
 
-| 단계 | 시간 | 청구항 | 내용 |
-|------|------|--------|------|
-| ① 의미 단위 분해 | 7초 | 1(a), 2 | 원본 문제 → 6개 의미 단위 (개념·값) 카드 |
-| ② 그래프 변환 | 8초 | 1(b), 3 | 12개 노드 + 12개 엣지로 문항 구조 그래프 |
-| ③ 신경망 임베딩 | 7초 | 1(c), 5 | 노드 → 16차원 벡터 (질문 + 4개 선택지) |
-| ④ 유사도 → 점수벡터 | 7초 | 1(d), 6 | 코사인 유사도 막대그래프 + 보정계수 |
-| ⑤ 정답 결정 | 6초 | 1(e), 7 | argmax → 정답 ② Φ ≈ 2.011×10⁻⁵ Wb |
+### 1. cloudflare_prj 백엔드에 router 추가
 
-### 예시 문제 (전기기사 전기자기학)
-
-> 권수 N=200, 단면적 A=2cm², 평균 자로 길이 ℓ=10cm 인 환상 솔레노이드에
-> 전류 I=2A 가 흐를 때 자속 Φ 의 값(Wb)은? (μ₀ = 4π×10⁻⁷)
->
-> ① 1.005×10⁻⁵ Wb  ② 2.011×10⁻⁵ Wb  ③ 4.021×10⁻⁵ Wb  ④ 8.042×10⁻⁵ Wb
-
-정답: **②** (Φ = N·μ₀·I·A / ℓ = 200 × 4π×10⁻⁷ × 2 × 2×10⁻⁴ / 0.1)
-
----
-
-## 변리사 미팅 활용 포인트
-
-### 좌측 사이드바 — 청구항 텍스트 1:1 매칭
-화면 좌측에 **청구항 1의 (a)~(e) 원문 전체**가 표시되며, 현재 진행 중인 단계가 엠버색으로 자동 하이라이트됩니다.
-
-### v5 보고서 차별점 강조
-화면 하단의 ⓘ 노트에 v5 선행기술 분석 보고서의 **핵심 차별점**이 박혀 있습니다:
-- 단계 2: "선택지가 그래프 정식 멤버" (US 10,108,604 차별점)
-- 단계 4: "1:N 매칭 (질문 1개 ↔ 선택지 N개)" 강조
-- 단계 5: "이미 제공된 N개 선택지에서 정답 1개 선택" — 새 문제 생성 아님
-
-### PAUSE 버튼
-우측 상단 **❚❚ PAUSE** 버튼으로 특정 단계에서 멈춰서 자세히 설명 가능.
-
-### ESSENTIAL BASIS 박스
-좌측 사이드바 하단에 청구항 1의 핵심 기반(Essential Basis)이 명시되어 있어,
-변리사님이 의견서 답변 작성 시 참조할 수 있습니다.
-
----
-
-## 빌드 및 배포 (선택)
-
-정적 파일로 빌드하려면:
 ```bash
-npm run build
+# diagnostic_router.py 를 cloudflare_prj/routers/diagnostic.py 로 복사
+cp /path/to/diagnostic_router.py D:/leejaeoh/johungwoo/cloudflare_prj/routers/diagnostic.py
+
+# main.py 에 한 줄 추가:
+from routers import diagnostic
+app.include_router(diagnostic.router)
+
+# CORS 설정 (main.py):
+from fastapi.middleware.cors import CORSMiddleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "https://paen.vercel.app",  # ← 실제 도메인으로
+    ],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 ```
 
-`dist/` 폴더에 정적 HTML/JS 가 생성됩니다.
-이걸 Vercel, Netlify, 또는 단순 정적 호스팅에 올리면 변리사님께 URL 만 보내드릴 수 있습니다.
+### 2. 환경 변수
+
+`cloudflare_prj/.env`:
+```
+ANTHROPIC_API_KEY=sk-ant-...
+EXAM_DATA_DIR=./exam_data
+```
+
+### 3. 헬스체크
 
 ```bash
-npm run preview   # 빌드 결과 로컬 미리보기
+curl https://cloudflareprj-production.up.railway.app/api/diagnostic/health
+```
+
+기대 응답:
+```json
+{
+  "ok": true,
+  "pool_size": 1200,
+  "subjects": ["EE-EM", "EE-PW", "..."],
+  "model": "claude-sonnet-4-5",
+  "anthropic_key_set": true
+}
 ```
 
 ---
 
-## 디자인
+## 📡 백엔드 API
 
-- **다크 + PCB 그리드 배경** — 전기/회로 도메인 분위기
-- **엠버(주황) + 시안(청록)** — 과학기술 + 엔지니어링 청사진
-- **SF Mono + Iowan Old Style 혼합** — 특허 문서의 격식 + 기술적 정밀성
-- **외부 라이브러리 의존성 없음** — React 기본 훅(useState, useEffect, useRef)만 사용
+### `GET /api/diagnostic/preview`
+
+진단 메타 12개 즉시 반환 (3초). AI 호출 없음.
+
+쿼리:
+- `major`: `electrical` | `related` | `none`
+- `months`: 학습 개월수 (정수)
+- `seed`: 재현용 시드
+- `limit`: 1-12 (기본 12)
+
+### `POST /api/diagnostic/generate/stream`
+
+SSE 로 12문제 progressive 생성. 약 4-5분 소요.
+
+요청:
+```json
+{
+  "user_prior": { "major": "electrical", "months": 6 },
+  "seed": 42,
+  "limit": 12,
+  "exclude_q_uids": []
+}
+```
+
+이벤트:
+- `meta_selected`: 메타 12개 선정 완료 (즉시)
+- `question`: 1문제 생성 완료 (×12)
+- `error`: 어떤 문제 생성 실패
+- `done`: 전체 종료
+
+### `GET /api/diagnostic/health`
+
+헬스체크.
 
 ---
 
-## 디렉토리 구조
+## 🎬 변리사 미팅 시나리오
+
+1. **`/` 홈** — 회사 소개, "이재오님은 5건 특허를 보유하고 있습니다"
+2. **`/demo/claim1`** — "청구항 1이 이렇게 동작합니다 (35초 애니메이션)"
+3. **`/demo/live`** — "그리고 실제로 우리 서비스에서 이렇게 작동합니다"
+   - "메타 미리보기" 버튼 → 3초 후 12개 메타 카드 표시
+   - "AI 본문 생성" 버튼 → 4-5분 동안 1개씩 카드가 위에서 아래로 떨어짐
+   - 각 카드에 "✓ 검증 통과" 배지 = **청구항 19 (역변환 검증) 작동 증거**
+4. **`/patents`** — 5건 portfolio 우산 구조
+5. **`/about`** — 회사 신뢰성 (이재오님 약력)
+
+---
+
+## 🔧 트러블슈팅
+
+**Q. CORS 에러**
+A. cloudflare_prj 백엔드 `main.py`에 CORSMiddleware 의 `allow_origins` 에 프론트 도메인 추가.
+
+**Q. 백엔드 헬스체크 실패**
+A. (1) Railway 백엔드 배포 상태 확인 (2) `ANTHROPIC_API_KEY` 환경변수 설정 (3) `exam_data/` 디렉토리에 JSON 파일들 확인.
+
+**Q. SSE 연결이 끊김**
+A. Railway 의 timeout 설정 (기본 30초) 확인 필요. `--keep-alive` 옵션 또는 응답 헤더 `X-Accel-Buffering: no` 확인.
+
+**Q. localhost:5173 시작 시 백엔드만 로컬로**
+A. `.env`에서 `VITE_API_BASE=http://localhost:8000` 으로 변경하고 cloudflare_prj 도 로컬로 띄움.
+
+---
+
+## 📂 디렉토리 구조
 
 ```
 patent-demo/
-├── package.json          # 의존성 정의
-├── vite.config.js         # Vite 설정
-├── index.html             # HTML 템플릿
-├── README.md              # 이 파일
-├── .gitignore
+├── package.json
+├── vite.config.js
+├── index.html
+├── .env.example
+├── README.md
 └── src/
-    ├── main.jsx           # React 진입점
-    └── PatentClaim1Demo.jsx   # 메인 컴포넌트 (1500+ 줄)
+    ├── main.jsx                # 라우터 진입점
+    ├── Layout.jsx              # 상단 네비 + Footer
+    ├── theme.js                # 디자인 토큰
+    ├── api.js                  # 백엔드 호출 (preview + SSE)
+    ├── PatentClaim1Demo.jsx    # 청구항 1 애니메이션 (기존)
+    └── pages/
+        ├── HomePage.jsx
+        ├── PatentsPage.jsx
+        ├── AboutPage.jsx
+        └── LiveDemoPage.jsx    # 백엔드 연결 진단 페이지
 ```
-
----
-
-## 트러블슈팅
-
-**Q. `npm install` 시 에러**
-A. Node.js 버전 확인 (v18 이상 필요). `node --version` 으로 확인 후, 너무 낮으면 [Node.js](https://nodejs.org/)에서 LTS 재설치.
-
-**Q. 5173 포트가 이미 사용 중**
-A. `vite.config.js` 에서 `port: 5173` 을 다른 번호 (예: 5174)로 변경.
-
-**Q. 화면이 깨져 보임**
-A. Chrome, Edge, Safari 최신 버전 사용 권장. IE는 지원 안 함.

@@ -1,8 +1,8 @@
 {
-  "name": "patent-claim1-demo",
+  "name": "patent-demo",
   "private": true,
-  "version": "1.0.0",
-  "description": "변리사 미팅용 - 청구항 1 5단계 파이프라인 시각화 (이재오, 2025-12-22 출원)",
+  "version": "1.1.0",
+  "description": "변리사 미팅용 - 5건 특허 portfolio + 청구항 시각화 (이재오, 에이아이컴퍼니)",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
