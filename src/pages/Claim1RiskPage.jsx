@@ -1,504 +1,112 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { COLORS, FONT, SHADOW } from "../theme.js";
 
 /**
- * Claim1RiskPage — 청구항 1 진보성 위협 분석 (홍성훈 변리사 검토용)
+ * Claim1RiskPage — 청구항 1 차별화 데모 (애니메이션 강화)
  *
- * 라우팅 추가 예시 (App.jsx):
- *   import Claim1RiskPage from "./pages/Claim1RiskPage.jsx";
- *   <Route path="/demo/claim1-risk" element={<Claim1RiskPage />} />
+ * 핵심 메시지:
+ *   "선행기술 A(KG) + B(임베딩) = 진보성 위협처럼 보이지만,
+ *    우리 청구항은 '객관식 입력 한정'으로 5단계 전체를 재정의한다."
  *
- * HomePage CTA 추가 예시:
- *   <CTACard to="/demo/claim1-risk" accent={COLORS.pink} ... />
+ * 시퀀스:
+ *   Phase 0: 두 선행기술 카드 좌우 대기
+ *   Phase 1: 좌우에서 중앙으로 충돌 (위협 시각화 + 폭발)
+ *   Phase 2: "OBJECTIVE-CHOICE" 도장이 위에서 강하게 떨어짐 (충격파)
+ *   Phase 3: 도장에서 5개 라인이 뻗어 5단계 카드로 점령
+ *   Phase 4: 카드 모두 보라색으로 변하며 결론 박스 활성화
  */
 
-const STEPS = [
-  {
-    id: 1,
-    short: "의미 단위 분해",
-    full: "문장형 문제를 구성하는 질문 요소 및 선택지 요소를 의미 단위로 분해하는 단계",
-    side: "left",
-    prior: {
-      field: "NLP / Information Extraction",
-      tech: "Tokenization · Semantic Parsing",
-      since: "1990s~",
-      note: "문장을 의미 단위(토큰·구·절)로 분해하는 것은 자연어 처리의 가장 기초적 전처리. 입력이 객관식인지 주관식인지는 형식적 차이일 뿐, 분해 기법 자체에 신규성을 인정받기 어려움.",
-    },
-  },
-  {
-    id: 2,
-    short: "노드·엣지 그래프 변환",
-    full: "질문·선택지 요소를 노드로, 의미적·구조적 관계를 엣지로 하는 복수의 문항 구조로 변환하는 단계",
-    side: "left",
-    prior: {
-      field: "Knowledge Graph / Semantic Network",
-      tech: "Text-to-Graph · OpenIE · AMR Parsing",
-      since: "2000년대 초~",
-      note: '문장에서 개체와 관계를 추출하여 그래프로 표현하는 기법은 다수 선행문헌(Stanford OpenIE, AMR, KG Construction). "객관식"이라는 입력 한정만으로 진보성 확보가 어려움.',
-    },
-  },
-  {
-    id: 3,
-    short: "임베딩 생성",
-    full: "복수의 문항 구조에 신경망 또는 임베딩 기법을 적용하여 질문·선택지 임베딩을 생성하는 단계",
-    side: "right",
-    prior: {
-      field: "Representation Learning",
-      tech: "Word2Vec · GloVe · BERT · Sentence-Transformers",
-      since: "2013~",
-      note: "텍스트 단위(단어·문장)를 벡터로 임베딩하는 기법은 표준 기술. 그래프 노드 임베딩(Node2Vec, GraphSAGE)도 2014년 이후 공지기술.",
-    },
-  },
-  {
-    id: 4,
-    short: "유사도·거리 연산",
-    full: "질문 임베딩과 선택지 임베딩 간 유사도·거리 연산을 수행하여 각 선택지 점수 벡터를 산출하는 단계",
-    side: "right",
-    prior: {
-      field: "Vector Similarity Search",
-      tech: "Cosine Similarity · Euclidean Distance · FAISS",
-      since: "벡터 표현 등장과 동시",
-      note: "임베딩 벡터 간 유사도/거리 계산은 표현학습의 자연스러운 후속 연산. 수많은 QA·검색 시스템이 채택한 표준 결합 방식.",
-    },
-  },
-  {
-    id: 5,
-    short: "정답 결정",
-    full: "점수 벡터에 기초하여 선택지들 중 하나를 정답으로 결정하는 단계",
-    side: "right",
-    prior: {
-      field: "Multiple Choice QA",
-      tech: "argmax over candidate scores",
-      since: "QA 시스템 표준",
-      note: "argmax 기반 선택은 다지선다 QA의 표준 결정 방식. SQuAD·RACE·MMLU 등 모든 객관식 벤치마크가 동일 구조 사용.",
-    },
-  },
-];
-
-const PRIOR_LEFT = {
-  title: "Prior Art A — 텍스트 → 지식그래프 변환",
-  badge: "KG EXTRACTION",
-  color: COLORS.pink,
-  examples: [
-    "Stanford OpenIE (2015) — 문장에서 (subject, relation, object) 트리플 추출",
-    "AMR Parsing (Banarescu et al., 2013) — 문장의 의미 표현을 그래프로",
-    "Text-to-Graph for QA — 질의·문맥을 그래프화하는 다수 학술논문",
-  ],
-  threat: "청구항 1의 단계 1·2를 단독으로 커버",
-};
-
-const PRIOR_RIGHT = {
-  title: "Prior Art B — 임베딩 + 유사도 기반 QA",
-  badge: "EMBEDDING QA",
-  color: COLORS.cyan,
-  examples: [
-    "Word2Vec (Mikolov, 2013) — 단어를 벡터 공간에 임베딩",
-    "Sentence-BERT (Reimers, 2019) — 문장 임베딩 + cosine similarity",
-    "MC-QA via embedding distance — 다수의 공지 시스템",
-  ],
-  threat: "청구항 1의 단계 3·4·5를 단독으로 커버",
-};
-
 export default function Claim1RiskPage() {
-  const [activeId, setActiveId] = useState(2);
-  const current = STEPS.find((s) => s.id === activeId);
+  const [phase, setPhase] = useState(0);
+  const [autoplay, setAutoplay] = useState(true);
+  const timerRef = useRef(null);
+
+  useEffect(() => {
+    if (!autoplay) return;
+    const schedule = [
+      { delay: 600, next: 1 },
+      { delay: 1800, next: 2 },
+      { delay: 1400, next: 3 },
+      { delay: 2400, next: 4 },
+      { delay: 3500, next: 0 },
+    ];
+    const step = schedule[phase];
+    if (step) {
+      timerRef.current = setTimeout(() => setPhase(step.next), step.delay);
+    }
+    return () => clearTimeout(timerRef.current);
+  }, [phase, autoplay]);
+
+  const restart = () => {
+    clearTimeout(timerRef.current);
+    setPhase(0);
+    setAutoplay(true);
+  };
 
   return (
-    <div style={{ padding: "48px 40px", maxWidth: 1180, margin: "0 auto" }}>
-      {/* ─────────── 헤더 ─────────── */}
-      <div style={{ marginBottom: 32 }}>
-        <div
-          style={{
-            display: "inline-block",
-            padding: "5px 14px",
-            background: COLORS.dark,
-            color: COLORS.white,
-            fontFamily: FONT.mono,
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: "0.18em",
-            borderRadius: 999,
-            marginBottom: 14,
-          }}
-        >
-          ◆ ATTORNEY REVIEW · INTERNAL
-        </div>
-        <h1
-          style={{
-            fontSize: 44,
-            fontWeight: 800,
-            margin: 0,
-            lineHeight: 1.15,
-            letterSpacing: "-0.02em",
-            background: `linear-gradient(135deg, ${COLORS.dark}, ${COLORS.pink} 60%, ${COLORS.orange})`,
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-          }}
-        >
-          청구항 1 진보성 분석
-          <br />
-          선행기술 결합 매핑
-        </h1>
-        <p
-          style={{
-            marginTop: 14,
-            fontSize: 15,
-            color: COLORS.textDim,
-            lineHeight: 1.6,
-          }}
-        >
-          P-03 학습 콘텐츠 자동 생성 / 청구항 1의 5단계가{" "}
-          <strong>두 공지 분야의 단순 결합</strong>으로 분해될 수 있는지
-          검토합니다.
-          <br />
-          홍성훈 변리사 검토용 · 2026.05.07
-        </p>
-      </div>
+    <div style={{ padding: "40px 32px", maxWidth: 1280, margin: "0 auto" }}>
+      <style>{KEYFRAMES}</style>
 
-      {/* ─────────── 청구항 원문 인용 ─────────── */}
+      <Header />
+
+      {/* 핵심 메시지 띠 */}
       <div
         style={{
-          padding: "22px 26px",
-          background: COLORS.glass,
-          backdropFilter: "blur(20px)",
-          borderRadius: 16,
-          borderLeft: `4px solid ${COLORS.dark}`,
-          marginBottom: 20,
-          boxShadow: SHADOW.sm,
-        }}
-      >
-        <div
-          style={{
-            fontFamily: FONT.mono,
-            fontSize: 10,
-            color: COLORS.textDim,
-            letterSpacing: "0.18em",
-            marginBottom: 10,
-            fontWeight: 700,
-          }}
-        >
-          CLAIM 1 — VERBATIM
-        </div>
-        <p
-          style={{
-            margin: 0,
-            fontSize: 14.5,
-            lineHeight: 1.75,
-            color: COLORS.text,
-            fontFamily: 'Georgia, "Times New Roman", serif',
-            fontStyle: "italic",
-          }}
-        >
-          문제 관리 서버에 의해 수행되는, 학습 또는 평가를 목적으로 제공되는{" "}
-          <span
-            style={{
-              fontStyle: "normal",
-              fontWeight: 700,
-              color: COLORS.purple,
-            }}
-          >
-            문장형 문제
-          </span>
-          를 자동으로 풀이하고, 상기 문장형 문제를 기반으로 학습자에게 맞춤형
-          문항을 생성해주기 위한 방법으로서, ① 의미 단위 분해, ② 노드·엣지
-          그래프 변환, ③ 임베딩 생성, ④ 유사도·거리 연산, ⑤ 정답 결정의 5단계를
-          포함하는 방법.
-        </p>
-      </div>
-
-      {/* ─────────── Risk Note 박스 ─────────── */}
-      <div
-        style={{
-          padding: "18px 22px",
-          background: "linear-gradient(135deg, #fff7ed, #ffedd5)",
-          border: `1px solid ${COLORS.orange}40`,
+          padding: "16px 24px",
+          background: "linear-gradient(90deg, #1e293b, #4c1d95)",
+          color: COLORS.white,
           borderRadius: 14,
-          marginBottom: 40,
+          marginBottom: 24,
           display: "flex",
-          gap: 18,
-          alignItems: "flex-start",
-          boxShadow: SHADOW.sm,
-        }}
-      >
-        <div
-          style={{
-            padding: "4px 10px",
-            background: COLORS.orange,
-            color: COLORS.white,
-            fontFamily: FONT.mono,
-            fontSize: 10,
-            fontWeight: 800,
-            letterSpacing: "0.15em",
-            borderRadius: 999,
-            flexShrink: 0,
-            marginTop: 2,
-          }}
-        >
-          RISK
-        </div>
-        <p
-          style={{
-            margin: 0,
-            fontSize: 14,
-            color: COLORS.text,
-            lineHeight: 1.65,
-          }}
-        >
-          청구항 1은 입력을 <em>"객관식 문장형 문제"</em>로 한정하고 있으나, 그
-          외 5개 단계는 모두 (A) 텍스트→그래프 추출과 (B) 임베딩→유사도 기반 QA,
-          두 공지 분야의 직접적 결합으로 분해됨.{" "}
-          <strong>입력 한정만으로는 진보성 인정이 어려울 수 있음.</strong>
-        </p>
-      </div>
-
-      {/* ─────────── ① 5단계 타임라인 ─────────── */}
-      <SectionLabel num="①" text="청구항 1 — 5단계 흐름 (단계를 클릭하세요)" />
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(5, 1fr)",
-          gap: 12,
-          marginBottom: 16,
-        }}
-      >
-        {STEPS.map((step) => {
-          const isActive = activeId === step.id;
-          const sideColor = step.side === "left" ? COLORS.pink : COLORS.cyan;
-          return (
-            <button
-              key={step.id}
-              onClick={() => setActiveId(step.id)}
-              style={{
-                cursor: "pointer",
-                textAlign: "left",
-                padding: 16,
-                borderRadius: 14,
-                border: "none",
-                background: isActive ? COLORS.dark : COLORS.white,
-                color: isActive ? COLORS.white : COLORS.text,
-                boxShadow: isActive ? SHADOW.glow(sideColor) : SHADOW.sm,
-                transition: "all 0.25s",
-                position: "relative",
-                overflow: "hidden",
-                fontFamily: "inherit",
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive)
-                  e.currentTarget.style.transform = "translateY(-2px)";
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive)
-                  e.currentTarget.style.transform = "translateY(0)";
-              }}
-            >
-              <div
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: 3,
-                  background: sideColor,
-                }}
-              />
-              <div
-                style={{
-                  fontFamily: FONT.mono,
-                  fontSize: 10,
-                  fontWeight: 700,
-                  letterSpacing: "0.15em",
-                  color: isActive ? sideColor : COLORS.textDim,
-                  marginBottom: 6,
-                  marginTop: 4,
-                }}
-              >
-                STEP {String(step.id).padStart(2, "0")}
-              </div>
-              <div
-                style={{ fontSize: 13.5, fontWeight: 700, lineHeight: 1.35 }}
-              >
-                {step.short}
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* 선택된 단계 풀텍스트 */}
-      <div
-        style={{
-          padding: "16px 20px",
-          background: COLORS.glass,
-          backdropFilter: "blur(20px)",
-          borderRadius: 12,
-          fontSize: 14,
-          color: COLORS.text,
-          lineHeight: 1.7,
-          marginBottom: 44,
-          boxShadow: SHADOW.sm,
-        }}
-      >
-        <span
-          style={{
-            fontFamily: FONT.mono,
-            fontSize: 11,
-            color: COLORS.textDim,
-            marginRight: 10,
-            fontWeight: 700,
-          }}
-        >
-          STEP {String(current.id).padStart(2, "0")} ▸
-        </span>
-        {current.full}
-      </div>
-
-      {/* ─────────── ② 선행기술 매핑 ─────────── */}
-      <SectionLabel num="②" text="선행기술 매핑 — 좌(KG) / 우(임베딩)" />
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 20,
-          marginBottom: 32,
-        }}
-      >
-        <PriorArtCard
-          data={PRIOR_LEFT}
-          step={current}
-          isActive={current.side === "left"}
-        />
-        <PriorArtCard
-          data={PRIOR_RIGHT}
-          step={current}
-          isActive={current.side === "right"}
-        />
-      </div>
-
-      {/* 결합 표시 */}
-      <div
-        style={{
-          position: "relative",
-          margin: "16px 0 36px",
-          textAlign: "center",
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            top: "50%",
-            left: 0,
-            right: 0,
-            height: 1,
-            borderTop: `1px dashed ${COLORS.textDim}`,
-          }}
-        />
-        <span
-          style={{
-            position: "relative",
-            display: "inline-block",
-            padding: "6px 18px",
-            background: COLORS.bg || "#fafafa",
-            fontFamily: FONT.mono,
-            fontSize: 11,
-            color: COLORS.textDim,
-            letterSpacing: "0.25em",
-            fontWeight: 700,
-          }}
-        >
-          ◆ 단순 결합 (COMBINATION) ◆
-        </span>
-      </div>
-
-      {/* ─────────── ③ 결론 ─────────── */}
-      <div
-        style={{
-          padding: 30,
-          background: COLORS.glass,
-          backdropFilter: "blur(20px)",
-          borderRadius: 20,
-          border: `2px solid ${COLORS.dark}`,
+          alignItems: "center",
+          gap: 16,
           boxShadow: SHADOW.md,
         }}
       >
         <div
           style={{
             fontFamily: FONT.mono,
-            fontSize: 11,
+            fontSize: 10,
+            padding: "4px 10px",
+            background: COLORS.orange,
             color: COLORS.dark,
-            letterSpacing: "0.18em",
-            marginBottom: 14,
+            borderRadius: 999,
             fontWeight: 800,
+            letterSpacing: "0.18em",
+            flexShrink: 0,
           }}
         >
-          ③ ANALYSIS — OBVIOUSNESS CONCERN
+          THE THESIS
         </div>
-        <p
-          style={{
-            fontSize: 15,
-            lineHeight: 1.75,
-            color: COLORS.text,
-            margin: 0,
-          }}
-        >
-          청구항 1의 단계 1·2는 <strong>지식그래프 추출 분야</strong>에서, 단계
-          3·4·5는 <strong>임베딩·유사도 기반 QA 분야</strong>에서 각각 공지된
-          기법이며, 두 분야는 모두 "텍스트 입력에 대한 의미 표현"이라는 동일한
-          기술 영역에 속하므로 통상의 기술자가 결합할 동기(motivation to
-          combine)를 인정받을 가능성이 높습니다.
-        </p>
-
-        <div
-          style={{
-            marginTop: 22,
-            padding: 20,
-            background: COLORS.white,
-            borderRadius: 14,
-            borderLeft: `4px solid ${COLORS.purple}`,
-          }}
-        >
-          <div
+        <div style={{ fontSize: 15, lineHeight: 1.5 }}>
+          선행기술 두 개의 결합? 인정. 그러나 본 청구항의{" "}
+          <span
             style={{
-              fontFamily: FONT.mono,
-              fontSize: 10,
-              color: COLORS.purple,
+              background: `linear-gradient(90deg, ${COLORS.orange}, ${COLORS.pink})`,
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              fontSize: 18,
               fontWeight: 800,
-              letterSpacing: "0.18em",
-              marginBottom: 10,
             }}
           >
-            ▶ 대응 전략 (제안)
-          </div>
-          <ol
-            style={{
-              margin: 0,
-              paddingLeft: 22,
-              fontSize: 14,
-              lineHeight: 1.85,
-              color: COLORS.text,
-            }}
-          >
-            <li>
-              <strong>객관식 입력에 특유한 비자명한 처리 단계</strong>를 청구항
-              본문에 도입
-              <span style={{ color: COLORS.textDim }}>
-                {" "}
-                — 선택지 간 상호 의존 제약, 정답 일관성 검증, 오답 분포 학습 등
-              </span>
-            </li>
-            <li>
-              결과물(자동 생성문항)이 단순 풀이를 넘어{" "}
-              <strong>"맞춤형 문항 생성"으로 환류되는 폐루프 구조</strong>를
-              명시
-            </li>
-            <li>
-              종속항에 <strong>도메인 특화 한정</strong> 강화 검토
-              (회로해석·법규 적용 등 전기기사 도메인 고유 제약)
-            </li>
-          </ol>
+            "객관식 입력 한정"
+          </span>
+          은 단순 한정이 아니라 5단계 전체의 의미를 재정의하는 차별화
+          요소입니다.
         </div>
       </div>
 
-      {/* 푸터 */}
+      <ControlBar
+        phase={phase}
+        onRestart={restart}
+        setPhase={setPhase}
+        setAutoplay={setAutoplay}
+      />
+
+      <Stage phase={phase} />
+
+      <Conclusion phase={phase} />
+
       <div
         style={{
           marginTop: 28,
@@ -513,209 +121,650 @@ export default function Claim1RiskPage() {
           textTransform: "uppercase",
         }}
       >
-        <span>Confidential · Attorney Work Product</span>
+        <span>홍성훈 변리사 검토용 · 2026.05.07</span>
         <span>elecai.co.kr / Demo Build</span>
       </div>
     </div>
   );
 }
 
-/* ─────────────── sub components ─────────────── */
-
-function SectionLabel({ num, text }) {
+/* ═══════════════════════════════════════════════════════ */
+function Header() {
   return (
-    <div
-      style={{
-        fontFamily: FONT.mono,
-        fontSize: 11,
-        color: COLORS.textDim,
-        letterSpacing: "0.18em",
-        marginBottom: 14,
-        fontWeight: 700,
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-      }}
-    >
-      <span style={{ fontSize: 16, color: COLORS.purple }}>{num}</span>
-      {text.toUpperCase()}
+    <div style={{ marginBottom: 28 }}>
+      <div
+        style={{
+          display: "inline-block",
+          padding: "5px 14px",
+          background: COLORS.dark,
+          color: COLORS.white,
+          fontFamily: FONT.mono,
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: "0.18em",
+          borderRadius: 999,
+          marginBottom: 14,
+        }}
+      >
+        ◆ ATTORNEY REVIEW · INTERNAL
+      </div>
+      <h1
+        style={{
+          fontSize: 42,
+          fontWeight: 800,
+          margin: 0,
+          lineHeight: 1.1,
+          letterSpacing: "-0.02em",
+          background: `linear-gradient(135deg, ${COLORS.dark}, ${COLORS.purple} 50%, ${COLORS.pink})`,
+          WebkitBackgroundClip: "text",
+          WebkitTextFillColor: "transparent",
+        }}
+      >
+        청구항 1의 차별화 포인트
+        <br />— "객관식 입력 한정"의 의미
+      </h1>
     </div>
   );
 }
 
-function PriorArtCard({ data, step, isActive }) {
+/* ═══════════════════════════════════════════════════════ */
+function ControlBar({ phase, onRestart, setPhase, setAutoplay }) {
+  const phases = [
+    "대기",
+    "선행기술 충돌",
+    "객관식 도장",
+    "차별화 확산",
+    "결론",
+  ];
   return (
     <div
       style={{
-        padding: 22,
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        padding: "12px 16px",
         background: COLORS.glass,
         backdropFilter: "blur(20px)",
-        borderRadius: 18,
-        borderLeft: `5px solid ${data.color}`,
-        boxShadow: isActive ? SHADOW.glow(data.color) : SHADOW.sm,
-        opacity: isActive ? 1 : 0.55,
-        transition: "all 0.3s",
-        position: "relative",
-        overflow: "hidden",
+        borderRadius: 12,
+        marginBottom: 20,
+        boxShadow: SHADOW.sm,
       }}
     >
-      {isActive && (
+      <button
+        onClick={onRestart}
+        style={{
+          padding: "8px 16px",
+          background: COLORS.dark,
+          color: COLORS.white,
+          border: "none",
+          borderRadius: 999,
+          fontFamily: FONT.mono,
+          fontSize: 11,
+          fontWeight: 700,
+          cursor: "pointer",
+          letterSpacing: "0.1em",
+          flexShrink: 0,
+        }}
+      >
+        ▶ REPLAY
+      </button>
+      <div style={{ display: "flex", gap: 6, flex: 1 }}>
+        {phases.map((label, i) => (
+          <button
+            key={i}
+            onClick={() => {
+              setAutoplay(false);
+              setPhase(i);
+            }}
+            style={{
+              flex: 1,
+              padding: "8px 10px",
+              background: phase === i ? COLORS.purple : COLORS.white,
+              color: phase === i ? COLORS.white : COLORS.textDim,
+              border: "none",
+              borderRadius: 8,
+              fontFamily: FONT.mono,
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: "0.1em",
+              cursor: "pointer",
+              transition: "all 0.2s",
+            }}
+          >
+            {String(i).padStart(2, "0")} · {label.toUpperCase()}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════ */
+function Stage({ phase }) {
+  return (
+    <div
+      style={{
+        position: "relative",
+        height: 620,
+        background:
+          "radial-gradient(circle at 50% 40%, #1e1b4b 0%, #0f172a 70%)",
+        borderRadius: 24,
+        overflow: "hidden",
+        boxShadow: SHADOW.md,
+        marginBottom: 24,
+      }}
+    >
+      {/* 배경 그리드 */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          backgroundImage:
+            "linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)",
+          backgroundSize: "40px 40px",
+          opacity: phase >= 1 ? 1 : 0.3,
+          transition: "opacity 0.8s",
+        }}
+      />
+
+      {/* Phase 1 충돌 시 화면 플래시 */}
+      {phase === 1 && (
         <div
           style={{
             position: "absolute",
-            top: -30,
-            right: -30,
-            width: 100,
-            height: 100,
-            background: `radial-gradient(circle, ${data.color}30, transparent 70%)`,
-            borderRadius: "50%",
+            inset: 0,
+            background: `radial-gradient(circle at 50% 50%, ${COLORS.pink}40, transparent 60%)`,
+            animation: "flash 0.8s ease-out",
+            pointerEvents: "none",
           }}
         />
       )}
+
+      {/* Phase 라벨 */}
       <div
         style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          marginBottom: 14,
-          gap: 10,
+          position: "absolute",
+          top: 20,
+          left: 20,
+          fontFamily: FONT.mono,
+          fontSize: 11,
+          color: "rgba(255,255,255,0.5)",
+          letterSpacing: "0.2em",
+          fontWeight: 700,
         }}
       >
-        <h3
+        PHASE {String(phase).padStart(2, "0")} ◆{" "}
+        {
+          [
+            "IDLE",
+            "PRIOR ART COLLISION",
+            "DIFFERENTIATOR DROP",
+            "REDEFINE PROPAGATION",
+            "CONCLUSION",
+          ][phase]
+        }
+      </div>
+
+      {/* 좌측 선행기술 A */}
+      <PriorArtToken
+        side="left"
+        phase={phase}
+        title="Prior Art A"
+        subtitle="Knowledge Graph Extraction"
+        examples={["OpenIE (2015)", "AMR Parsing (2013)", "Text-to-Graph QA"]}
+        color={COLORS.pink}
+      />
+
+      {/* 우측 선행기술 B */}
+      <PriorArtToken
+        side="right"
+        phase={phase}
+        title="Prior Art B"
+        subtitle="Embedding + Similarity QA"
+        examples={[
+          "Word2Vec (2013)",
+          "Sentence-BERT (2019)",
+          "Cosine Similarity",
+        ]}
+        color={COLORS.cyan}
+      />
+
+      {/* 중앙 폭발 */}
+      {phase === 1 && (
+        <div
           style={{
-            fontSize: 16,
-            fontWeight: 800,
-            margin: 0,
-            color: COLORS.text,
-            lineHeight: 1.3,
+            position: "absolute",
+            top: "38%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: 200,
+            height: 200,
+            borderRadius: "50%",
+            background: `radial-gradient(circle, ${COLORS.orange}80, transparent 70%)`,
+            animation: "explode 1s ease-out",
           }}
-        >
-          {data.title}
-        </h3>
-        <span
+        />
+      )}
+
+      {/* OBJECTIVE-CHOICE 도장 */}
+      {phase >= 2 && <ObjectiveChoiceStamp phase={phase} />}
+
+      {/* 차별화 라인 */}
+      {phase >= 3 && <DifferentiatorRays phase={phase} />}
+
+      {/* 5단계 카드 */}
+      <FiveStepBar phase={phase} />
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════ */
+function PriorArtToken({ side, phase, title, subtitle, examples, color }) {
+  // phase 0: 좌우 대기
+  // phase 1: 중앙으로 충돌하며 사라짐
+  // phase >= 2: 멀리 흐리게
+
+  const baseLeft = side === "left" ? "5%" : "auto";
+  const baseRight = side === "right" ? "5%" : "auto";
+
+  let transform = "translateY(-50%)";
+  let opacity = 1;
+
+  if (phase === 1) {
+    transform = `${side === "left" ? "translateX(280px)" : "translateX(-280px)"} translateY(-50%) scale(0.4) rotate(${
+      side === "left" ? "12deg" : "-12deg"
+    })`;
+    opacity = 0;
+  } else if (phase >= 2) {
+    transform = `${side === "left" ? "translateX(-30px)" : "translateX(30px)"} translateY(-50%) scale(0.75)`;
+    opacity = 0.22;
+  }
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: "32%",
+        left: baseLeft,
+        right: baseRight,
+        width: 230,
+        padding: 18,
+        background: `linear-gradient(135deg, ${color}30, ${color}10)`,
+        border: `1.5px solid ${color}80`,
+        borderRadius: 16,
+        backdropFilter: "blur(12px)",
+        transform,
+        opacity,
+        transition:
+          phase === 1
+            ? "all 0.8s cubic-bezier(0.7, 0, 0.84, 0)"
+            : "all 0.6s ease-out",
+        boxShadow: `0 0 40px ${color}30`,
+      }}
+    >
+      <div
+        style={{
+          fontFamily: FONT.mono,
+          fontSize: 9,
+          color,
+          letterSpacing: "0.2em",
+          fontWeight: 800,
+          marginBottom: 6,
+        }}
+      >
+        ▸ {title.toUpperCase()}
+      </div>
+      <div
+        style={{
+          fontSize: 14,
+          fontWeight: 800,
+          color: COLORS.white,
+          marginBottom: 10,
+        }}
+      >
+        {subtitle}
+      </div>
+      {examples.map((ex, i) => (
+        <div
+          key={i}
           style={{
-            flexShrink: 0,
-            padding: "3px 10px",
-            background: data.color,
-            color: COLORS.white,
             fontFamily: FONT.mono,
-            fontSize: 9,
-            fontWeight: 800,
-            letterSpacing: "0.15em",
-            borderRadius: 999,
+            fontSize: 10,
+            color: "rgba(255,255,255,0.7)",
+            marginBottom: 3,
           }}
         >
-          {data.badge}
-        </span>
-      </div>
+          · {ex}
+        </div>
+      ))}
+    </div>
+  );
+}
 
-      <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
-        {data.examples.map((ex, i) => (
-          <li
-            key={i}
-            style={{
-              fontSize: 12.5,
-              color: COLORS.textDim,
-              lineHeight: 1.6,
-              marginBottom: 6,
-              paddingLeft: 14,
-              position: "relative",
-            }}
-          >
-            <span
-              style={{
-                position: "absolute",
-                left: 0,
-                color: data.color,
-                fontWeight: 700,
-              }}
-            >
-              ▸
-            </span>
-            {ex}
-          </li>
-        ))}
-      </ul>
-
+/* ═══════════════════════════════════════════════════════ */
+function ObjectiveChoiceStamp({ phase }) {
+  return (
+    <>
       <div
         style={{
-          marginTop: 14,
-          padding: "8px 12px",
-          background: `${data.color}15`,
-          borderRadius: 8,
-          fontSize: 12,
-          color: COLORS.text,
-          fontStyle: "italic",
-        }}
-      >
-        ⚠ {data.threat}
-      </div>
-
-      <div
-        style={{
-          marginTop: 16,
-          paddingTop: 14,
-          borderTop: `1px solid ${COLORS.textDim}25`,
+          position: "absolute",
+          top: "38%",
+          left: "50%",
+          padding: "26px 44px",
+          background: `linear-gradient(135deg, ${COLORS.orange}, ${COLORS.pink})`,
+          border: `4px solid ${COLORS.white}`,
+          borderRadius: 12,
+          boxShadow: `0 20px 60px ${COLORS.orange}80, inset 0 0 20px rgba(255,255,255,0.3)`,
+          animation:
+            phase === 2
+              ? "stamp 0.9s cubic-bezier(0.34, 1.56, 0.64, 1)"
+              : "none",
+          transform: "translate(-50%, -50%)",
+          zIndex: 10,
         }}
       >
         <div
           style={{
             fontFamily: FONT.mono,
-            fontSize: 9,
-            color: COLORS.textDim,
+            fontSize: 11,
+            color: "rgba(255,255,255,0.9)",
+            letterSpacing: "0.25em",
             fontWeight: 700,
-            letterSpacing: "0.18em",
-            marginBottom: 8,
+            marginBottom: 4,
+            textAlign: "center",
           }}
         >
-          ▼ 이 단계와의 매핑
+          OUR DIFFERENTIATOR
         </div>
-        {isActive ? (
-          <div style={{ fontSize: 12.5, lineHeight: 1.7 }}>
-            <Row label="분야" value={step.prior.field} bold />
-            <Row label="기법" value={step.prior.tech} mono />
-            <Row label="공지 시점" value={step.prior.since} />
-            <p
-              style={{
-                marginTop: 10,
-                marginBottom: 0,
-                color: COLORS.text,
-                lineHeight: 1.7,
-              }}
-            >
-              {step.prior.note}
-            </p>
-          </div>
-        ) : (
+        <div
+          style={{
+            fontSize: 28,
+            fontWeight: 900,
+            color: COLORS.white,
+            letterSpacing: "0.05em",
+            textShadow: "0 2px 8px rgba(0,0,0,0.3)",
+            textAlign: "center",
+          }}
+        >
+          OBJECTIVE-CHOICE
+        </div>
+        <div
+          style={{
+            fontSize: 14,
+            fontWeight: 700,
+            color: "rgba(255,255,255,0.95)",
+            textAlign: "center",
+            marginTop: 4,
+          }}
+        >
+          객관식 입력 한정
+        </div>
+      </div>
+
+      {/* 충격파 — 도장이 떨어질 때 */}
+      {phase === 2 && (
+        <>
           <div
             style={{
-              fontSize: 12,
-              color: COLORS.textDim,
-              fontStyle: "italic",
+              position: "absolute",
+              top: "38%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              width: 100,
+              height: 100,
+              border: `3px solid ${COLORS.orange}`,
+              borderRadius: "50%",
+              animation: "shockwave 1s ease-out",
+              pointerEvents: "none",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              top: "38%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              width: 100,
+              height: 100,
+              border: `2px solid ${COLORS.pink}`,
+              borderRadius: "50%",
+              animation: "shockwave 1.2s ease-out 0.15s",
+              pointerEvents: "none",
+            }}
+          />
+        </>
+      )}
+    </>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════ */
+function DifferentiatorRays({ phase }) {
+  return (
+    <svg
+      style={{
+        position: "absolute",
+        inset: 0,
+        width: "100%",
+        height: "100%",
+        pointerEvents: "none",
+      }}
+      preserveAspectRatio="none"
+    >
+      <defs>
+        <linearGradient id="rayGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor={COLORS.orange} stopOpacity="1" />
+          <stop offset="100%" stopColor={COLORS.purple} stopOpacity="0.4" />
+        </linearGradient>
+      </defs>
+      {[0, 1, 2, 3, 4].map((i) => {
+        // 5단계 카드 중심 X 좌표 (Stage padding 고려)
+        const xPct = 12 + i * 18.5;
+        return (
+          <line
+            key={i}
+            x1="50%"
+            y1="38%"
+            x2={`${xPct}%`}
+            y2="78%"
+            stroke="url(#rayGrad)"
+            strokeWidth="2.5"
+            strokeDasharray="600"
+            strokeDashoffset={phase >= 3 ? 0 : 600}
+            style={{
+              transition: `stroke-dashoffset 0.6s ease-out ${i * 0.12}s`,
+            }}
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════ */
+const STEPS = [
+  { id: 1, label: "의미 분해", was: "토큰화", now: "선택지 단위 분해" },
+  { id: 2, label: "그래프 변환", was: "텍스트→KG", now: "질문↔선택지 그래프" },
+  { id: 3, label: "임베딩", was: "Word2Vec", now: "선택지 의존 임베딩" },
+  { id: 4, label: "유사도 연산", was: "Cosine 거리", now: "선택지 점수 벡터" },
+  { id: 5, label: "정답 결정", was: "argmax", now: "정답 일관성 검증" },
+];
+
+function FiveStepBar({ phase }) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        bottom: 30,
+        left: 30,
+        right: 30,
+        display: "grid",
+        gridTemplateColumns: "repeat(5, 1fr)",
+        gap: 12,
+      }}
+    >
+      {STEPS.map((step, i) => {
+        const captured = phase >= 3;
+        const fullyOurs = phase >= 4;
+        return (
+          <div
+            key={step.id}
+            style={{
+              padding: "14px 12px",
+              background: fullyOurs
+                ? `linear-gradient(135deg, ${COLORS.purple}, ${COLORS.pink})`
+                : captured
+                  ? `linear-gradient(135deg, ${COLORS.orange}40, ${COLORS.pink}40)`
+                  : "rgba(255,255,255,0.08)",
+              border: captured
+                ? `2px solid ${COLORS.orange}`
+                : "1px solid rgba(255,255,255,0.2)",
+              borderRadius: 12,
+              textAlign: "center",
+              transition: `all 0.6s ease-out ${i * 0.12}s`,
+              transform: captured
+                ? "translateY(-4px) scale(1.03)"
+                : "translateY(0) scale(1)",
+              boxShadow: captured ? `0 8px 24px ${COLORS.orange}40` : "none",
             }}
           >
-            이 단계는 본 분야와 직접 매핑되지 않음 (반대편 카드 참조)
+            <div
+              style={{
+                fontFamily: FONT.mono,
+                fontSize: 9,
+                color: captured ? COLORS.white : "rgba(255,255,255,0.5)",
+                letterSpacing: "0.15em",
+                fontWeight: 700,
+                marginBottom: 4,
+              }}
+            >
+              STEP {String(step.id).padStart(2, "0")}
+            </div>
+            <div
+              style={{
+                fontSize: 13,
+                fontWeight: 800,
+                color: COLORS.white,
+                marginBottom: 6,
+              }}
+            >
+              {step.label}
+            </div>
+            <div
+              style={{
+                fontSize: 10,
+                color: captured
+                  ? "rgba(255,255,255,0.95)"
+                  : "rgba(255,255,255,0.5)",
+                fontStyle: "italic",
+                minHeight: 14,
+                transition: "all 0.4s",
+              }}
+            >
+              {captured ? `→ ${step.now}` : step.was}
+            </div>
           </div>
-        )}
-      </div>
+        );
+      })}
     </div>
   );
 }
 
-function Row({ label, value, mono, bold }) {
+/* ═══════════════════════════════════════════════════════ */
+function Conclusion({ phase }) {
+  const visible = phase >= 4;
   return (
-    <div style={{ display: "flex", gap: 8, marginBottom: 4 }}>
-      <span style={{ color: COLORS.textDim, minWidth: 60 }}>{label}:</span>
-      <span
+    <div
+      style={{
+        padding: 28,
+        background: visible
+          ? `linear-gradient(135deg, ${COLORS.purple}, ${COLORS.pink})`
+          : COLORS.glass,
+        backdropFilter: "blur(20px)",
+        borderRadius: 20,
+        boxShadow: visible ? SHADOW.glow(COLORS.purple) : SHADOW.sm,
+        transition: "all 0.8s",
+        color: visible ? COLORS.white : COLORS.text,
+        opacity: visible ? 1 : 0.55,
+      }}
+    >
+      <div
         style={{
-          color: COLORS.text,
-          fontWeight: bold ? 700 : 500,
-          fontFamily: mono ? FONT.mono : "inherit",
-          fontSize: mono ? 11.5 : "inherit",
+          fontFamily: FONT.mono,
+          fontSize: 11,
+          letterSpacing: "0.2em",
+          fontWeight: 800,
+          marginBottom: 12,
+          color: visible ? "rgba(255,255,255,0.85)" : COLORS.textDim,
         }}
       >
-        {value}
-      </span>
+        ▶ KEY ARGUMENT (변리사 답변용 논거)
+      </div>
+      <p style={{ margin: 0, fontSize: 16, lineHeight: 1.75, fontWeight: 600 }}>
+        선행기술 A·B는 <strong>"임의의 텍스트 입력"</strong>을 전제로 한 일반
+        기법입니다. 본 청구항의 <strong>"객관식 문장형 문제"</strong> 한정은
+        단순한 입력 제한이 아니라, 5개 단계 모두에 <strong>구조적 제약</strong>
+        (선택지 간 배타성·정답 유일성·오답 분포)을 부여하므로, 통상의 기술자가
+        두 선행기술을 결합해도 본 청구항의 구성에 자명하게 도달할 수 없습니다.
+      </p>
     </div>
   );
 }
+
+/* ═══════════════════════════════════════════════════════
+   KEYFRAMES — 강한 애니메이션
+   ═══════════════════════════════════════════════════════ */
+const KEYFRAMES = `
+  @keyframes flash {
+    0% { opacity: 0; }
+    30% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+
+  @keyframes explode {
+    0% {
+      width: 0;
+      height: 0;
+      opacity: 1;
+    }
+    100% {
+      width: 600px;
+      height: 600px;
+      opacity: 0;
+    }
+  }
+
+  @keyframes stamp {
+    0% {
+      transform: translate(-50%, -350%) scale(2.8) rotate(-15deg);
+      opacity: 0;
+    }
+    50% {
+      transform: translate(-50%, -50%) scale(1.45) rotate(-3deg);
+      opacity: 1;
+    }
+    70% {
+      transform: translate(-50%, -50%) scale(0.92) rotate(1deg);
+    }
+    85% {
+      transform: translate(-50%, -50%) scale(1.05) rotate(-0.5deg);
+    }
+    100% {
+      transform: translate(-50%, -50%) scale(1) rotate(0deg);
+      opacity: 1;
+    }
+  }
+
+  @keyframes shockwave {
+    0% {
+      width: 100px;
+      height: 100px;
+      opacity: 1;
+    }
+    100% {
+      width: 800px;
+      height: 800px;
+      opacity: 0;
+    }
+  }
+`;
