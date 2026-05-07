@@ -74,6 +74,15 @@ export default function HomePage() {
           tag="35s · 애니메이션"
         />
         <CTACard
+          to="/demo/claim1-risk"
+          accent={COLORS.pink}
+          accentSoft="#fce7f3"
+          eyebrow="ATTORNEY REVIEW"
+          title="청구항 1 진보성 위협 분석"
+          desc="5단계 = (KG 추출) + (임베딩 QA) 단순 결합으로 분해. 대응 전략 포함."
+          tag="검토용 · 인터랙티브"
+        />
+        <CTACard
           to="/demo/live"
           accent={COLORS.orange}
           accentSoft="#ffedd5"
@@ -144,7 +153,11 @@ export default function HomePage() {
           {[
             { color: COLORS.purple, label: "P-01", name: "지식 기반 판단" },
             { color: COLORS.pink, label: "P-02", name: "학습 DB 구축" },
-            { color: COLORS.cyan, label: "P-03", name: "콘텐츠 자동 생성 (3건 묶음)" },
+            {
+              color: COLORS.cyan,
+              label: "P-03",
+              name: "콘텐츠 자동 생성 (3건 묶음)",
+            },
             { color: COLORS.green, label: "P-04", name: "뉴로심볼릭 안전제어" },
             { color: COLORS.orange, label: "P-05", name: "배터리 열폭주 예측" },
           ].map((p) => (

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * 변리사 미팅용 — 청구항 1 5단계 파이프라인 시각화 (v2 컬러풀)
@@ -98,15 +98,44 @@ const PROBLEM = {
 
 const NODES = [
   { id: "Q", label: "Φ", type: "question", x: 380, y: 80, kind: "질문노드" },
-  { id: "C1", label: "환상 솔레노이드", type: "concept", x: 130, y: 180, kind: "개념노드" },
-  { id: "C2", label: "자속", type: "concept", x: 380, y: 180, kind: "개념노드" },
-  { id: "F", label: "Φ=NμIA/ℓ", type: "formula", x: 630, y: 180, kind: "수식노드" },
+  {
+    id: "C1",
+    label: "환상 솔레노이드",
+    type: "concept",
+    x: 130,
+    y: 180,
+    kind: "개념노드",
+  },
+  {
+    id: "C2",
+    label: "자속",
+    type: "concept",
+    x: 380,
+    y: 180,
+    kind: "개념노드",
+  },
+  {
+    id: "F",
+    label: "Φ=NμIA/ℓ",
+    type: "formula",
+    x: 630,
+    y: 180,
+    kind: "수식노드",
+  },
   { id: "V1", label: "N=200", type: "value", x: 60, y: 290, kind: "값노드" },
   { id: "V2", label: "A=2cm²", type: "value", x: 200, y: 290, kind: "값노드" },
   { id: "V3", label: "ℓ=10cm", type: "value", x: 340, y: 290, kind: "값노드" },
   { id: "V4", label: "I=2A", type: "value", x: 480, y: 290, kind: "값노드" },
   { id: "O1", label: "①", type: "option", x: 110, y: 410, kind: "선택지" },
-  { id: "O2", label: "②", type: "option", x: 310, y: 410, kind: "선택지", correct: true },
+  {
+    id: "O2",
+    label: "②",
+    type: "option",
+    x: 310,
+    y: 410,
+    kind: "선택지",
+    correct: true,
+  },
   { id: "O3", label: "③", type: "option", x: 510, y: 410, kind: "선택지" },
   { id: "O4", label: "④", type: "option", x: 680, y: 410, kind: "선택지" },
 ];
@@ -235,11 +264,21 @@ export default function PatentClaim1Demo() {
               transition: "box-shadow 0.6s",
             }}
           >
-            {stageIdx === 0 && <Stage1 progress={stageProgress} stage={stage} />}
-            {stageIdx === 1 && <Stage2 progress={stageProgress} stage={stage} />}
-            {stageIdx === 2 && <Stage3 progress={stageProgress} stage={stage} />}
-            {stageIdx === 3 && <Stage4 progress={stageProgress} stage={stage} />}
-            {stageIdx === 4 && <Stage5 progress={stageProgress} stage={stage} />}
+            {stageIdx === 0 && (
+              <Stage1 progress={stageProgress} stage={stage} />
+            )}
+            {stageIdx === 1 && (
+              <Stage2 progress={stageProgress} stage={stage} />
+            )}
+            {stageIdx === 2 && (
+              <Stage3 progress={stageProgress} stage={stage} />
+            )}
+            {stageIdx === 3 && (
+              <Stage4 progress={stageProgress} stage={stage} />
+            )}
+            {stageIdx === 4 && (
+              <Stage5 progress={stageProgress} stage={stage} />
+            )}
           </div>
 
           <StageIndicator stageIdx={stageIdx} elapsed={elapsed} />
@@ -666,8 +705,8 @@ function StageIndicator({ stageIdx, elapsed }) {
               i < stageIdx
                 ? `linear-gradient(135deg, ${s.accent}, ${s.accent}dd)`
                 : i === stageIdx
-                ? `linear-gradient(135deg, ${s.accent}, ${s.accent}cc)`
-                : "rgba(255,255,255,0.6)",
+                  ? `linear-gradient(135deg, ${s.accent}, ${s.accent}cc)`
+                  : "rgba(255,255,255,0.6)",
             color: i <= stageIdx ? "white" : "#94a3b8",
             border:
               i === stageIdx
@@ -687,8 +726,8 @@ function StageIndicator({ stageIdx, elapsed }) {
             cursor: "default",
           }}
         >
-          <span style={{ marginRight: "6px" }}>{s.emoji}</span>
-          ({String.fromCharCode(97 + i)}) {s.label_ko}
+          <span style={{ marginRight: "6px" }}>{s.emoji}</span>(
+          {String.fromCharCode(97 + i)}) {s.label_ko}
         </div>
       ))}
       <div
@@ -727,7 +766,9 @@ function Stage1({ progress, stage }) {
         }}
       >
         <div>
-          <SectionLabel color={stage.accent}>📥 INPUT — 문장형 문제</SectionLabel>
+          <SectionLabel color={stage.accent}>
+            📥 INPUT — 문장형 문제
+          </SectionLabel>
           <div
             style={{
               padding: "24px",
@@ -772,7 +813,9 @@ function Stage1({ progress, stage }) {
         </div>
 
         <div>
-          <SectionLabel color={stage.accent}>📤 OUTPUT — 의미 단위</SectionLabel>
+          <SectionLabel color={stage.accent}>
+            📤 OUTPUT — 의미 단위
+          </SectionLabel>
           <div
             style={{
               minHeight: "380px",
@@ -790,7 +833,7 @@ function Stage1({ progress, stage }) {
                   const delay = (i / PROBLEM.question_units.length) * 0.7;
                   const opacity = Math.max(
                     0,
-                    Math.min(1, (unitProgress - delay) * 4)
+                    Math.min(1, (unitProgress - delay) * 4),
                   );
                   const translateY = Math.max(0, 30 - opacity * 30);
                   const isValue = u.type === "value";
@@ -851,8 +894,8 @@ function Stage1({ progress, stage }) {
                   fontWeight: 600,
                 }}
               >
-                <PulseDot color={stage.accent} /> 형태소 · 토큰 · 개체명 · 의미역
-                분석 중...
+                <PulseDot color={stage.accent} /> 형태소 · 토큰 · 개체명 ·
+                의미역 분석 중...
               </div>
             )}
           </div>
@@ -861,7 +904,8 @@ function Stage1({ progress, stage }) {
 
       <BottomNote color={stage.accent}>
         💡 <strong>청구항 2</strong>: 형태소 분석, 토큰화, 개체명 인식, 의미역
-        분석을 적용하여 질문 요소(개념·단위)와 선택지 요소(수치·단위)를 분리 추출
+        분석을 적용하여 질문 요소(개념·단위)와 선택지 요소(수치·단위)를 분리
+        추출
       </BottomNote>
     </div>
   );
@@ -894,7 +938,10 @@ function Stage2({ progress, stage }) {
               boxShadow: "0 8px 24px -8px rgba(236, 72, 153, 0.3)",
             }}
           >
-            <svg viewBox="0 0 760 470" style={{ width: "100%", display: "block" }}>
+            <svg
+              viewBox="0 0 760 470"
+              style={{ width: "100%", display: "block" }}
+            >
               <defs>
                 {Object.entries(EDGE_COLOR).map(([type, color]) => (
                   <marker
@@ -935,10 +982,11 @@ function Stage2({ progress, stage }) {
                 const t = i / NODES.length;
                 const opacity = Math.max(
                   0,
-                  Math.min(1, (nodeProgress - t) * 5)
+                  Math.min(1, (nodeProgress - t) * 5),
                 );
                 if (opacity <= 0) return null;
-                const r = n.type === "question" ? 32 : n.type === "option" ? 24 : 28;
+                const r =
+                  n.type === "question" ? 32 : n.type === "option" ? 24 : 28;
                 const c = NODE_COLOR[n.type];
                 const scale = 0.7 + opacity * 0.3;
                 return (
@@ -947,7 +995,13 @@ function Stage2({ progress, stage }) {
                     opacity={opacity}
                     transform={`translate(${n.x}, ${n.y}) scale(${scale}) translate(${-n.x}, ${-n.y})`}
                   >
-                    <circle cx={n.x} cy={n.y} r={r + 4} fill={c.stroke} opacity="0.18" />
+                    <circle
+                      cx={n.x}
+                      cy={n.y}
+                      r={r + 4}
+                      fill={c.stroke}
+                      opacity="0.18"
+                    />
                     <circle
                       cx={n.x}
                       cy={n.y}
@@ -1020,7 +1074,9 @@ function Stage2({ progress, stage }) {
                     border: `2.5px solid ${c.stroke}`,
                   }}
                 />
-                <span style={{ color: c.text, fontSize: "12px", fontWeight: 700 }}>
+                <span
+                  style={{ color: c.text, fontSize: "12px", fontWeight: 700 }}
+                >
                   {label}
                 </span>
               </div>
@@ -1058,7 +1114,9 @@ function Stage2({ progress, stage }) {
                       strokeDasharray={lineStyle === "dashed" ? "4 3" : "0"}
                     />
                   </svg>
-                  <span style={{ color: color, fontSize: "12px", fontWeight: 700 }}>
+                  <span
+                    style={{ color: color, fontSize: "12px", fontWeight: 700 }}
+                  >
                     {label}
                   </span>
                 </div>
@@ -1069,8 +1127,8 @@ function Stage2({ progress, stage }) {
       </div>
 
       <BottomNote color={stage.accent}>
-        💡 <strong>청구항 3</strong>: 노드는 질문/조건/선택지/개념/수식/값 중 하나,
-        엣지는 의존·참조·포함·계산·동등성 관계 중 하나.{" "}
+        💡 <strong>청구항 3</strong>: 노드는 질문/조건/선택지/개념/수식/값 중
+        하나, 엣지는 의존·참조·포함·계산·동등성 관계 중 하나.{" "}
         <strong style={{ color: stage.accent }}>
           ✦ 선택지가 그래프 정식 멤버
         </strong>
@@ -1092,11 +1150,36 @@ function Stage3({ progress, stage }) {
     });
 
   const targets = [
-    { label: "질문 임베딩 (Φ)", color: "#7c3aed", bg: "#ede9fe", vec: seedVec(1, VECTOR_DIM) },
-    { label: "선택지 ① 임베딩", color: "#16a34a", bg: "#dcfce7", vec: seedVec(2, VECTOR_DIM) },
-    { label: "선택지 ② 임베딩", color: "#16a34a", bg: "#dcfce7", vec: seedVec(3, VECTOR_DIM) },
-    { label: "선택지 ③ 임베딩", color: "#16a34a", bg: "#dcfce7", vec: seedVec(4, VECTOR_DIM) },
-    { label: "선택지 ④ 임베딩", color: "#16a34a", bg: "#dcfce7", vec: seedVec(5, VECTOR_DIM) },
+    {
+      label: "질문 임베딩 (Φ)",
+      color: "#7c3aed",
+      bg: "#ede9fe",
+      vec: seedVec(1, VECTOR_DIM),
+    },
+    {
+      label: "선택지 ① 임베딩",
+      color: "#16a34a",
+      bg: "#dcfce7",
+      vec: seedVec(2, VECTOR_DIM),
+    },
+    {
+      label: "선택지 ② 임베딩",
+      color: "#16a34a",
+      bg: "#dcfce7",
+      vec: seedVec(3, VECTOR_DIM),
+    },
+    {
+      label: "선택지 ③ 임베딩",
+      color: "#16a34a",
+      bg: "#dcfce7",
+      vec: seedVec(4, VECTOR_DIM),
+    },
+    {
+      label: "선택지 ④ 임베딩",
+      color: "#16a34a",
+      bg: "#dcfce7",
+      vec: seedVec(5, VECTOR_DIM),
+    },
   ];
 
   return (
@@ -1118,7 +1201,7 @@ function Stage3({ progress, stage }) {
         {targets.map((t, i) => {
           const itemProgress = Math.max(
             0,
-            Math.min(1, (progress - i * 0.12) * 3)
+            Math.min(1, (progress - i * 0.12) * 3),
           );
           return (
             <div
@@ -1151,11 +1234,13 @@ function Stage3({ progress, stage }) {
               >
                 {t.label}
               </div>
-              <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+              <div
+                style={{ display: "flex", gap: "4px", alignItems: "center" }}
+              >
                 {t.vec.map((v, j) => {
                   const cellOpacity = Math.max(
                     0,
-                    Math.min(1, (itemProgress - j / VECTOR_DIM) * 6)
+                    Math.min(1, (itemProgress - j / VECTOR_DIM) * 6),
                   );
                   return (
                     <div
@@ -1191,8 +1276,8 @@ function Stage3({ progress, stage }) {
 
       <BottomNote color={stage.accent}>
         💡 <strong>청구항 5</strong>: 그래프 합성곱 신경망(GCN), 그래프 어텐션
-        네트워크(GAT), GraphSAGE, Node2Vec, 자기지도 대조학습 중 적어도 하나를 적용.
-        질문 임베딩 + 4개 선택지 임베딩 = 총 5개 벡터 생성.
+        네트워크(GAT), GraphSAGE, Node2Vec, 자기지도 대조학습 중 적어도 하나를
+        적용. 질문 임베딩 + 4개 선택지 임베딩 = 총 5개 벡터 생성.
       </BottomNote>
     </div>
   );
@@ -1248,7 +1333,7 @@ function Stage4({ progress, stage }) {
         {scores.map((s, i) => {
           const itemProgress = Math.max(
             0,
-            Math.min(1, (progress - i * 0.1) * 2.5)
+            Math.min(1, (progress - i * 0.1) * 2.5),
           );
           const barWidth = s.value * 100 * itemProgress;
           return (
@@ -1552,8 +1637,8 @@ function Stage5({ progress, stage }) {
       </div>
 
       <BottomNote color={stage.accent}>
-        💡 <strong>청구항 7</strong>: 점수 벡터의 최대값 또는 최소값 기준으로 정답
-        결정. 동점 발생 시 난이도 기준 또는 무작위화 규칙 적용.{" "}
+        💡 <strong>청구항 7</strong>: 점수 벡터의 최대값 또는 최소값 기준으로
+        정답 결정. 동점 발생 시 난이도 기준 또는 무작위화 규칙 적용.{" "}
         <strong style={{ color: stage.accent }}>
           ✦ 이미 제공된 N개 선택지에서 정답 1개를 선택
         </strong>
