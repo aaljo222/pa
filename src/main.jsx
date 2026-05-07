@@ -4,6 +4,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import Layout from "./Layout.jsx";
 import AboutPage from "./pages/AboutPage.jsx";
+import Claim1RiskPage from "./pages/Claim1RiskPage.jsx";
 import HomePage from "./pages/HomePage.jsx";
 import LiveDemoPage from "./pages/LiveDemoPage.jsx";
 import PatentsPage from "./pages/PatentsPage.jsx";
